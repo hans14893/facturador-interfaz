@@ -3,24 +3,11 @@ import { Link } from "react-router-dom";
 import { listEmpresas } from "../../../api/adminEmpresasApi";
 import type { Empresa } from "../../../api/adminEmpresasApi";
 import { getErrorMessage } from "../../../api/errorHelper";
-import EmpresaFormModal from "../modals/EmpresaFormModal";
-import UsuariosModal from "../modals/UsuariosModal";
-import CertificadoModal from "../modals/CertificadoModal";
-import ApiKeysModal from "../modals/ApiKeysModal";
-import { btnEditSm } from "../../../ui/buttonStyles";
 
 export default function AdminEmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
-  // Modales
-  const [showEmpresaModal, setShowEmpresaModal] = useState(false);
-  const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null);
-  const [showUsuariosModal, setShowUsuariosModal] = useState(false);
-  const [showCertificadoModal, setShowCertificadoModal] = useState(false);
-  const [showApiKeysModal, setShowApiKeysModal] = useState(false);
-  const [selectedEmpresaId, setSelectedEmpresaId] = useState<number | null>(null);
 
   async function loadEmpresas() {
     setLoading(true);
@@ -38,40 +25,6 @@ export default function AdminEmpresasPage() {
     loadEmpresas();
   }, []);
 
-  function openCreateModal() {
-    setEditingEmpresa(null);
-    setShowEmpresaModal(true);
-  }
-
-  function openEditModal(empresa: Empresa) {
-    setEditingEmpresa(empresa);
-    setShowEmpresaModal(true);
-  }
-
-  function openUsuariosModal(empresaId: number) {
-    setSelectedEmpresaId(empresaId);
-    setShowUsuariosModal(true);
-  }
-
-  function openCertificadoModal(empresaId: number) {
-    setSelectedEmpresaId(empresaId);
-    setShowCertificadoModal(true);
-  }
-
-  function openApiKeysModal(empresaId: number) {
-    setSelectedEmpresaId(empresaId);
-    setShowApiKeysModal(true);
-  }
-
-  function handleModalClose() {
-    setShowEmpresaModal(false);
-    setShowUsuariosModal(false);
-    setShowCertificadoModal(false);
-    setShowApiKeysModal(false);
-    setEditingEmpresa(null);
-    setSelectedEmpresaId(null);
-  }
-
   return (
     <div>
       <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -81,12 +34,6 @@ export default function AdminEmpresasPage() {
             Administra empresas, usuarios, certificados digitales y API keys desde un solo lugar.
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:opacity-95 shadow-sm"
-        >
-          + Nueva Empresa
-        </button>
       </div>
 
       {loading ? (
@@ -115,14 +62,8 @@ export default function AdminEmpresasPage() {
           </div>
           <div className="text-base font-semibold text-slate-900">No hay empresas registradas</div>
           <div className="mt-1 text-sm text-slate-500">
-            Crea tu primera empresa para comenzar
+            Aún no se ha creado ninguna empresa
           </div>
-          <button
-            onClick={openCreateModal}
-            className="mt-6 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:opacity-95"
-          >
-            + Crear Primera Empresa
-          </button>
         </div>
       ) : (
         <div className="mt-6">
@@ -164,34 +105,20 @@ export default function AdminEmpresasPage() {
                         >
                           Series
                         </Link>
-                        <button
-                          onClick={() => openEditModal(empresa)}
-                          className={btnEditSm}
-                          title="Editar empresa"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => openUsuariosModal(empresa.id)}
+                        <Link
+                          to={`/admin/empresas/${empresa.id}/usuarios`}
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           title="Gestionar usuarios"
                         >
                           Usuarios
-                        </button>
-                        <button
-                          onClick={() => openCertificadoModal(empresa.id)}
+                        </Link>
+                        <Link
+                          to={`/admin/empresas/${empresa.id}/certificado`}
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           title="Gestionar certificado"
                         >
                           Certificado
-                        </button>
-                        <button
-                          onClick={() => openApiKeysModal(empresa.id)}
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                          title="Gestionar API Keys"
-                        >
-                          API Keys
-                        </button>
+                        </Link>
                       </div>
                     </td>
                   </tr>
@@ -200,36 +127,6 @@ export default function AdminEmpresasPage() {
             </table>
           </div>
         </div>
-      )}
-
-      {/* Modales */}
-      <EmpresaFormModal
-        isOpen={showEmpresaModal}
-        onClose={handleModalClose}
-        onSuccess={loadEmpresas}
-        empresa={editingEmpresa}
-      />
-
-      {selectedEmpresaId && (
-        <>
-          <UsuariosModal
-            isOpen={showUsuariosModal}
-            onClose={handleModalClose}
-            empresaId={selectedEmpresaId}
-          />
-
-          <CertificadoModal
-            isOpen={showCertificadoModal}
-            onClose={handleModalClose}
-            empresaId={selectedEmpresaId}
-          />
-
-          <ApiKeysModal
-            isOpen={showApiKeysModal}
-            onClose={handleModalClose}
-            empresaId={selectedEmpresaId}
-          />
-        </>
       )}
     </div>
   );
