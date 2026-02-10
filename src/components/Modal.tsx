@@ -32,9 +32,11 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
     >
       <div
         className={`relative w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl`}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <h2 className="text-lg font-black text-slate-900">{title}</h2>

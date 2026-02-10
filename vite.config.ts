@@ -17,6 +17,9 @@ export default defineConfig({
   ],
 
   server: {
+    // Usa un puerto fijo para evitar conflictos con otras interfaces Vite
+    port: 5175,
+    strictPort: true,
     proxy: {
       // Dev: evita CORS y mantiene el mismo path que en producción
       '/api': {

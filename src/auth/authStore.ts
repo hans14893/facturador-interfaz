@@ -22,9 +22,7 @@ export function setAuth(data: AuthData) {
 
 export function clearAuth() {
   localStorage.removeItem(KEY);
-  // Limpiar toda la cache del navegador para evitar que persistan datos de otra empresa
-  localStorage.clear();
-  sessionStorage.clear();
+  sessionStorage.removeItem(KEY);
 }
 
 export function isLoggedIn(): boolean {

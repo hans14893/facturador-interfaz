@@ -97,8 +97,25 @@ export type NotaDebitoRequest = {
   sucursalId?: number;
 };
 
-export async function listComprobantes(): Promise<Comprobante[]> {
-  const { data } = await http.get<Comprobante[]>("/api/v1/comprobantes");
+/** Respuesta paginada del backend (Spring Page<>) */
+export type PageResponse<T> = {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;   // página actual (0-based)
+  size: number;
+  first: boolean;
+  last: boolean;
+};
+
+export async function listComprobantes(
+  page = 0,
+  size = 50,
+): Promise<PageResponse<Comprobante>> {
+  const { data } = await http.get<PageResponse<Comprobante>>(
+    "/api/v1/comprobantes",
+    { params: { page, size } },
+  );
   return data;
 }
 
@@ -141,9 +158,12 @@ export async function getComprobanteConDetalle(id: number): Promise<ComprobanteC
   return data;
 }
 
-export async function listarComprobantes(): Promise<Comprobante[]> {
-  const { data } = await http.get<Comprobante[]>("/api/v1/comprobantes");
-  return data;
+/** @deprecated Usa listComprobantes(page, size) en su lugar */
+export async function listarComprobantes(
+  page = 0,
+  size = 50,
+): Promise<PageResponse<Comprobante>> {
+  return listComprobantes(page, size);
 }
 
 export async function registrarVentaInterna(request: VentaInternaRequest): Promise<Comprobante> {
@@ -189,32 +209,5 @@ export type CpeRequest = {
 
 export async function emitirComprobante(request: CpeRequest): Promise<Comprobante> {
   const { data } = await http.post<Comprobante>("/api/v1/comprobantes", request);
-  return data;
-}
-
-export type AnularComprobanteResponse = {
-  accion: "RA" | "RC" | "NC";
-  ticket?: string | null;
-  notaCreditoId?: number | null;
-  mensaje?: string | null;
-};
-
-export async function anularComprobante(id: number, motivo: string): Promise<AnularComprobanteResponse> {
-  const { data } = await http.post<AnularComprobanteResponse>(`/api/v1/comprobantes/${id}/anular`, {
-    motivo,
-  });
-  return data;
-}
-
-export type SunatTicketStatusResponse = {
-  ticket: string;
-  statusCode: string;
-  cdrCode?: string | null;
-  mensaje?: string | null;
-  comprobanteEstado: string;
-};
-
-export async function consultarTicketAnulacion(id: number): Promise<SunatTicketStatusResponse> {
-  const { data } = await http.get<SunatTicketStatusResponse>(`/api/v1/comprobantes/${id}/anulacion/ticket-status`);
   return data;
 }

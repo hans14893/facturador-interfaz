@@ -1,8 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AxiosError } from "axios";
-import { anularComprobante, consultarTicketAnulacion, listComprobantes } from "../api/comprobantesApi";
-import type { Comprobante } from "../api/comprobantesApi";
+import { listComprobantes } from "../api/comprobantesApi";
+import type { Comprobante, PageResponse } from "../api/comprobantesApi";
 import StatusPill from "../components/StatusPill";
 import Modal from "../components/Modal";
 import { getAuth } from "../auth/authStore";
@@ -10,37 +9,6 @@ import * as XLSX from "xlsx-js-style";
 
 type TipoDoc = "SUNAT_CPE" | "ALL" | "01" | "03" | "07" | "08"; // 01 Factura, 03 Boleta, 07 NC, 08 ND
 type Estado = "ALL" | "ACEPTADO" | "RECHAZADO" | "PENDIENTE" | "ANULADO" | "ENVIADO";
-
-const MOTIVOS_ANULACION = [
-  "Error en los datos del cliente",
-  "RUC o DNI incorrecto",
-  "Error en el importe",
-  "Producto incorrecto",
-  "Precio incorrecto",
-  "Cantidad incorrecta",
-  "Comprobante duplicado",
-  "Pedido cancelado",
-  "No se llegó a un acuerdo comercial",
-  "Devolución de productos",
-  "Anulación total",
-  "Otros",
-] as const;
-
-type MotivoAnulacionOption = (typeof MOTIVOS_ANULACION)[number];
-
-function boletaSinDocumentoIdentidad(c: { tipoDoc?: string; receptorNroDoc?: string | null; receptorTipoDoc?: string | null }) {
-  if (c.tipoDoc !== "03") return false;
-  const nro = (c.receptorNroDoc || "").trim();
-  
-  // Sin documento si no hay número o es todo ceros
-  if (!nro || /^0+$/.test(nro)) return true;
-  
-  // Si tiene un número válido (8 u 11 dígitos), tiene documento
-  if (nro.length === 8 || nro.length === 11) return false;
-  
-  // Otros casos se consideran sin documento válido
-  return true;
-}
 
 function toInputDate(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -58,13 +26,15 @@ function money(v: unknown) {
 function tipoDocLabel(td: string) {
   switch (td) {
     case "01":
-      return "01";
+      return "Factura";
     case "03":
-      return "03";
+      return "Boleta";
     case "07":
-      return "07";
+      return "N. Crédito";
     case "08":
-      return "08";
+      return "N. Débito";
+    case "99":
+      return "Interno";
     default:
       return td || "-";
   }
@@ -96,27 +66,20 @@ export default function ComprobantesPage() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const [anularOpen, setAnularOpen] = useState(false);
-  const [anularMotivoOption, setAnularMotivoOption] = useState<MotivoAnulacionOption | "">("");
-  const [anularMotivoOtros, setAnularMotivoOtros] = useState("");
-  const [anularTarget, setAnularTarget] = useState<Comprobante | null>(null);
-  const [anulando, setAnulando] = useState(false);
-  const [anularError, setAnularError] = useState<string | null>(null);
-
-  // Estados para modal de resultado de anulación
-  const [anulacionResultOpen, setAnulacionResultOpen] = useState(false);
-  const [anulacionMensaje, setAnulacionMensaje] = useState("");
-  const [anulacionTicket, setAnulacionTicket] = useState<string | null>(null);
-  const [notaCreditoId, setNotaCreditoId] = useState<number | null>(null);
+  // Paginación servidor
+  const [serverPage, setServerPage] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const PAGE_SIZE = 50;
 
   // Estados para modal de preview PDF
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [showPdfPreviewModal, setShowPdfPreviewModal] = useState(false);
-
-  const navigate = useNavigate();
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Función para abrir el previsualizador de PDF en modal
   async function abrirPdfPreview(comprobanteId: number, format: 'A4' | 'TICKET' = 'A4') {
+    setPdfLoading(true);
     const maxReintentos = 8;
     let intento = 0;
     
@@ -135,7 +98,7 @@ export default function ComprobantesPage() {
             await new Promise(resolve => setTimeout(resolve, 1000));
             return intentarAbrirPDF();
           } else {
-            console.log('PDF no disponible despuós de', intento, 'intentos');
+            console.log('PDF no disponible después de', intento, 'intentos');
             return false;
           }
         }
@@ -160,7 +123,11 @@ export default function ComprobantesPage() {
       }
     };
     
-    await intentarAbrirPDF();
+    const ok = await intentarAbrirPDF();
+    setPdfLoading(false);
+    if (!ok) {
+      setErr("No se pudo obtener el PDF. Intenta de nuevo más tarde.");
+    }
   }
 
   const cerrarPdfPreviewModal = () => {
@@ -212,7 +179,7 @@ export default function ComprobantesPage() {
 
       if (!response.ok) {
         const msg = await response.text();
-        alert(msg || `No se pudo descargar CDR (HTTP ${response.status})`);
+        setErr(msg || `No se pudo descargar CDR (HTTP ${response.status})`);
         return;
       }
 
@@ -228,12 +195,15 @@ export default function ComprobantesPage() {
     }
   }
 
-  async function load() {
+  async function load(page = serverPage) {
     try {
       setErr(null);
       setLoading(true);
-      const data = await listComprobantes();
-      setRows(data);
+      const pageData = await listComprobantes(page, PAGE_SIZE);
+      setRows(pageData.content);
+      setTotalElements(pageData.totalElements);
+      setTotalPages(pageData.totalPages);
+      setServerPage(pageData.number);
     } catch (ex: unknown) {
       if (ex instanceof AxiosError) {
         const data = ex.response?.data;
@@ -307,16 +277,16 @@ export default function ComprobantesPage() {
     return result;
   }, [rows, appliedDesde, appliedHasta, appliedTipoDoc, appliedEstado, appliedQEntidad]);
 
-  // Paginación
+  // Paginación (ahora server-side, filtrado aún en cliente)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 50;
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const itemsPerPage = PAGE_SIZE;
   
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filtered.slice(startIndex, endIndex);
-  }, [filtered, currentPage]);
+  // Filtrado client-side sobre la página actual del servidor
+  const paginatedData = filtered;
+
+  // Total real: si no hay filtros locales extra, usar totalElements del server
+  const displayTotal = filtered.length;
+  const displayTotalPages = totalPages;
 
   // Resetear a pógina 1 cuando cambien los filtros aplicados
   useEffect(() => {
@@ -461,22 +431,9 @@ export default function ComprobantesPage() {
     wsData.push([`Generado: ${new Date().toLocaleString("es-PE")}`]);
     wsData.push([]); // Fila vacía
 
-    // Función para obtener descripción del tipo de documento de identidad
+    // Función para obtener código del tipo de documento de identidad
     const getTipoDocIdentidad = (codigo: string | undefined) => {
-      switch (codigo) {
-        case "0": return "0-Doc.trib.no.dom.sin.ruc";
-        case "1": return "1-DNI";
-        case "4": return "4-Carnet extranjería";
-        case "6": return "6-RUC";
-        case "7": return "7-Pasaporte";
-        case "A": return "A-Ced.Diplomática";
-        case "B": return "B-Doc.ident.país resid.";
-        case "C": return "C-TIN";
-        case "D": return "D-IN";
-        case "E": return "E-TAM";
-        case "F": return "F-PTP";
-        default: return codigo || "-";
-      }
+      return codigo || "-";
     };
 
     // Encabezados completos
@@ -662,154 +619,6 @@ export default function ComprobantesPage() {
     XLSX.writeFile(wb, `comprobantes_${appliedDesde}_a_${appliedHasta}.xlsx`);
   }
 
-  function openAnularModal(c: Comprobante) {
-    if (c.anulado) {
-      alert("Este comprobante ya estó anulado.");
-      return;
-    }
-
-    if (boletaSinDocumentoIdentidad(c)) {
-      alert("SUNAT no permite anular ni emitir Nota de Cródito para una boleta sin DNI/RUC del cliente.");
-      return;
-    }
-
-    setAnularTarget(c);
-    setAnularMotivoOption("");
-    setAnularMotivoOtros("");
-    setAnularOpen(true);
-  }
-
-  function closeAnularModal() {
-    if (anulando) return;
-    setAnularOpen(false);
-    setAnularMotivoOption("");
-    setAnularMotivoOtros("");
-    setAnularTarget(null);
-    setAnularError(null);
-  }
-
-  async function confirmAnular() {
-    if (!anularTarget) return;
-
-    // Limpiar error previo
-    setAnularError(null);
-
-    let motivo = "";
-    if (!anularMotivoOption) {
-      setAnularError("Debe seleccionar un motivo.");
-      return;
-    }
-
-    if (anularMotivoOption === "Otros") {
-      const otros = anularMotivoOtros.trim();
-      if (!otros) {
-        setAnularError("Debe escribir el motivo en 'Otros'.");
-        return;
-      }
-      // Se envóa como texto libre, pero con prefijo para trazabilidad
-      motivo = `Otros: ${otros}`;
-    } else {
-      motivo = anularMotivoOption;
-    }
-
-    try {
-      setAnulando(true);
-      const resp = await anularComprobante(anularTarget.id, motivo);
-
-      closeAnularModal();
-
-      // Siempre se genera NC ahora - abrir preview PDF directamente
-      if (resp.accion === "NC" && resp.notaCreditoId) {
-        // Abrir el previsualizador de PDF
-        await abrirPdfPreview(resp.notaCreditoId);
-      }
-      
-      // Recargar lista al final
-      await load();
-    } catch (e: unknown) {
-      if (e instanceof AxiosError) {
-        const msg = typeof e.response?.data === "string" ? e.response?.data : e.message;
-        setAnularError(msg || "No se pudo generar la Nota de Crédito");
-      } else {
-        setAnularError(e instanceof Error ? e.message : "No se pudo generar la Nota de Crédito");
-      }
-    } finally {
-      setAnulando(false);
-    }
-  }
-
-  async function consultarTicket(c: Comprobante) {
-    try {
-      const resp = await consultarTicketAnulacion(c.id);
-      
-      // Crear modal personalizado
-      const overlay = document.createElement('div');
-      overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-      overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;';
-      
-      const modal = document.createElement('div');
-      modal.style.cssText = 'background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);';
-      
-      modal.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10b981;">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-          <h3 style="font-size: 20px; font-weight: 600; color: #0f172a; margin: 0;">Estado de Anulación</h3>
-        </div>
-        <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-          <div style="margin-bottom: 12px;">
-            <span style="font-weight: 500; color: #64748b; font-size: 13px;">Ticket:</span>
-            <div style="font-size: 16px; color: #0f172a; font-weight: 600; margin-top: 4px;">${resp.ticket}</div>
-          </div>
-          <div style="margin-bottom: 12px;">
-            <span style="font-weight: 500; color: #64748b; font-size: 13px;">Status Code:</span>
-            <div style="font-size: 15px; color: #0f172a; margin-top: 4px;">${resp.statusCode}</div>
-          </div>
-          ${resp.cdrCode ? `
-          <div style="margin-bottom: 12px;">
-            <span style="font-weight: 500; color: #64748b; font-size: 13px;">CDR:</span>
-            <div style="font-size: 15px; color: #0f172a; margin-top: 4px;">${resp.cdrCode}</div>
-          </div>` : ''}
-          ${resp.mensaje ? `
-          <div style="margin-bottom: 12px;">
-            <span style="font-weight: 500; color: #64748b; font-size: 13px;">Mensaje:</span>
-            <div style="font-size: 15px; color: #0f172a; margin-top: 4px;">${resp.mensaje}</div>
-          </div>` : ''}
-          <div>
-            <span style="font-weight: 500; color: #64748b; font-size: 13px;">Estado del Comprobante:</span>
-            <div style="font-size: 15px; color: #10b981; font-weight: 600; margin-top: 4px;">${resp.comprobanteEstado}</div>
-          </div>
-        </div>
-        <button id="closeModalBtn" style="width: 100%; background: #3b82f6; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.2s;">
-          Cerrar
-        </button>
-      `;
-      
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-      
-      // Hover effect
-      const btn = modal.querySelector('#closeModalBtn') as HTMLButtonElement;
-      btn.onmouseover = () => btn.style.background = '#2563eb';
-      btn.onmouseout = () => btn.style.background = '#3b82f6';
-      
-      // Cerrar modal
-      const closeModal = () => document.body.removeChild(overlay);
-      btn.onclick = closeModal;
-      overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
-      
-      await load();
-    } catch (e: unknown) {
-      if (e instanceof AxiosError) {
-        const msg = typeof e.response?.data === "string" ? e.response?.data : e.message;
-        alert(msg || "No se pudo consultar el ticket");
-      } else {
-        alert(e instanceof Error ? e.message : "No se pudo consultar el ticket");
-      }
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -844,7 +653,7 @@ export default function ComprobantesPage() {
 
           <div className="flex items-center gap-2 justify-center mb-6 px-8">
             <button
-              onClick={load}
+              onClick={() => load()}
               className="rounded-full bg-green-600 hover:bg-green-700 px-4 py-2 text-sm font-semibold text-white transition-colors flex items-center gap-2"
               title="Refrescar lista de comprobantes"
             >
@@ -986,7 +795,7 @@ export default function ComprobantesPage() {
                       <th className="px-2 py-2 text-center font-semibold">PDF</th>
                       <th className="px-2 py-2 text-center font-semibold">XML</th>
                       <th className="px-2 py-2 text-center font-semibold">CDR</th>
-                      <th className="px-2 py-2 text-center font-semibold">ANULAR</th>
+                      
                     </tr>
                   </thead>
 
@@ -1132,37 +941,7 @@ export default function ComprobantesPage() {
                             )}
                           </td>
 
-                          <td className="px-2 py-1.5 whitespace-nowrap text-center">
-                            {((r.tipoDoc === "01" || r.tipoDoc === "03") && (r.estado || "").toUpperCase() === "ACEPTADO" && !r.anulado) ? (
-                              boletaSinDocumentoIdentidad(r) ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  title="SUNAT no permite anular boletas sin DNI/RUC del cliente"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="inline-flex items-center justify-center rounded-full bg-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-600 cursor-not-allowed"
-                                >
-                                  Anular
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); openAnularModal(r); }}
-                                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white hover:bg-slate-800"
-                                >
-                                  Anular
-                                </button>
-                              )
-                            ) : (r.estado === 'PENDIENTE_BAJA' ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); consultarTicket(r); }}
-                                className="inline-flex items-center justify-center rounded-full bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-orange-500"
-                              >
-                                Consultar ticket
-                              </button>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
-                            ))}
-                          </td>
+                          
                         </tr>
                       );
                     })}
@@ -1251,35 +1030,6 @@ export default function ComprobantesPage() {
                       CDR
                     </button>
 
-                    {((r.tipoDoc === "01" || r.tipoDoc === "03") && (r.estado || "").toUpperCase() === "ACEPTADO" && !r.anulado) && (
-                      boletaSinDocumentoIdentidad(r) ? (
-                        <button
-                          type="button"
-                          disabled
-                          title="SUNAT no permite anular boletas sin DNI/RUC del cliente"
-                          className="flex-1 rounded-full bg-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed"
-                        >
-                          Anular
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => openAnularModal(r)}
-                          className="flex-1 rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                          title="Emitir Nota de Cródito por anulación"
-                        >
-                          Anular (NC)
-                        </button>
-                      )
-                    )}
-
-                    {r.estado === 'PENDIENTE_BAJA' && (
-                      <button
-                        onClick={() => consultarTicket(r)}
-                        className="flex-1 rounded-full bg-orange-600 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-500"
-                      >
-                        Consultar
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
@@ -1291,149 +1041,51 @@ export default function ComprobantesPage() {
               )}
             </div>
 
-            <Modal
-              isOpen={anularOpen}
-              onClose={closeAnularModal}
-              title="Emitir Nota de Cródito"
-              size="sm"
-            >
-              <div className="space-y-3">
-                <div className="text-sm text-slate-700">
-                  {anularTarget ? (
-                    <>
-                      <div className="font-semibold text-slate-900">
-                        {anularTarget.tipoDoc}-{anularTarget.serie}-{anularTarget.correlativo}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Fecha: {new Date(anularTarget.fechaEmision).toLocaleDateString("es-PE")} ó Total: S/ {money(anularTarget.total)}
-                      </div>
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <div className="text-xs text-blue-800">
-                            <span className="font-semibold">Se generaró una Nota de Cródito (tipo 01)</span> por anulación total del comprobante, incluyendo todos los ótems originales.
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-800 mb-1">Motivo</label>
-
-                  <select
-                    value={anularMotivoOption}
-                    onChange={(e) => setAnularMotivoOption(e.target.value as MotivoAnulacionOption)}
-                    disabled={anulando}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-                  >
-                    <option value="">Seleccione un motivo</option>
-                    {MOTIVOS_ANULACION.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-
-                  {anularMotivoOption === "Otros" ? (
-                    <div className="mt-2">
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Especifique</label>
-                      <textarea
-                        value={anularMotivoOtros}
-                        onChange={(e) => setAnularMotivoOtros(e.target.value)}
-                        rows={3}
-                        disabled={anulando}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-                        placeholder="Escriba el motivo..."
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="mt-2 text-[11px] text-slate-500">
-                    Si seleccionas "Otros", recién se habilita el campo para escribir.
-                  </div>
-
-                  {/* Mensaje de error */}
-                  {anularError && (
-                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <svg className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div className="text-xs text-red-800 font-medium">
-                          {anularError}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={closeAnularModal}
-                    disabled={anulando}
-                    className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={confirmAnular}
-                    disabled={anulando}
-                    className="flex-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {anulando ? "Generando NC..." : "Generar Nota de Cródito"}
-                  </button>
-                </div>
-              </div>
-            </Modal>
-
             {/* Controles de paginación */}
-            {filtered.length > itemsPerPage && (
+            {totalElements > itemsPerPage && (
               <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-2">
                 <div className="text-sm text-slate-600">
-                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filtered.length)} de {filtered.length} comprobantes
+                  Mostrando {(serverPage * itemsPerPage) + 1} - {Math.min((serverPage + 1) * itemsPerPage, totalElements)} de {totalElements} comprobantes
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
+                    onClick={() => load(0)}
+                    disabled={serverPage === 0}
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Primera
                   </button>
                   
                   <button
-                    onClick={() => setCurrentPage(p => p - 1)}
-                    disabled={currentPage === 1}
+                    onClick={() => load(serverPage - 1)}
+                    disabled={serverPage === 0}
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Anterior
                   </button>
                   
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    {Array.from({ length: Math.min(5, displayTotalPages) }, (_, i) => {
                       let pageNum;
-                      if (totalPages <= 5) {
+                      const cur = serverPage + 1; // 1-based for display
+                      if (displayTotalPages <= 5) {
                         pageNum = i + 1;
-                      } else if (currentPage <= 3) {
+                      } else if (cur <= 3) {
                         pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
+                      } else if (cur >= displayTotalPages - 2) {
+                        pageNum = displayTotalPages - 4 + i;
                       } else {
-                        pageNum = currentPage - 2 + i;
+                        pageNum = cur - 2 + i;
                       }
                       
                       return (
                         <button
                           key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
+                          onClick={() => load(pageNum - 1)}
                           className={[
                             "w-9 h-9 rounded-lg text-sm font-medium",
-                            currentPage === pageNum
+                            (serverPage + 1) === pageNum
                               ? "bg-blue-600 text-white"
                               : "border border-slate-200 text-slate-700 hover:bg-slate-50"
                           ].join(" ")}
@@ -1445,19 +1097,19 @@ export default function ComprobantesPage() {
                   </div>
                   
                   <button
-                    onClick={() => setCurrentPage(p => p + 1)}
-                    disabled={currentPage === totalPages}
+                    onClick={() => load(serverPage + 1)}
+                    disabled={serverPage + 1 >= displayTotalPages}
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Siguiente
                   </button>
                   
                   <button
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
+                    onClick={() => load(displayTotalPages - 1)}
+                    disabled={serverPage + 1 >= displayTotalPages}
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    óltima
+                    Última
                   </button>
                 </div>
               </div>
@@ -1472,7 +1124,7 @@ export default function ComprobantesPage() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">REGISTROS</div>
                 <div className="text-xl font-bold text-slate-900">
-                  {filtered.length}
+                  {totalElements}
                 </div>
               </div>
 
@@ -1515,88 +1167,15 @@ export default function ComprobantesPage() {
         )}
       </div>
 
-      {/* Modal de resultado de anulación */}
-      {anulacionResultOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-            {/* Header con gradiente */}
-            <div className="bg-gradient-to-r from-green-600 to-green-500 p-6 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">
-                    {notaCreditoId ? "Nota de Cródito Creada" : "Anulación Enviada"}
-                  </h3>
-                  <p className="text-sm text-green-100 mt-0.5">Operación exitosa</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="p-6 space-y-4">
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                <p className="text-slate-700 text-sm leading-relaxed">
-                  {anulacionMensaje}
-                </p>
-              </div>
-
-              {anulacionTicket && (
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                  <div className="flex items-start gap-3">
-                    <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <p className="text-xs font-semibold text-blue-900 mb-1">Nómero de Ticket</p>
-                      <p className="text-sm font-mono text-blue-700 font-medium">{anulacionTicket}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {notaCreditoId && (
-                <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                  <div className="flex items-start gap-3">
-                    <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold text-amber-900 mb-2">Nota de Credito Generada</p>
-                      <button
-                        onClick={() => {
-                          setAnulacionResultOpen(false);
-                          if (notaCreditoId) {
-                            navigate(`/admin/comprobantes/${notaCreditoId}`);
-                          }
-                        }}
-                        className="text-sm font-medium text-amber-700 hover:text-amber-800 underline"
-                      >
-                        Ver detalles del comprobante ?
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 pb-6 flex gap-3">
-              <button
-                onClick={() => {
-                  setAnulacionResultOpen(false);
-                  setAnulacionMensaje("");
-                  setAnulacionTicket(null);
-                  setNotaCreditoId(null);
-                }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
+      {/* Overlay de carga PDF */}
+      {pdfLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-8 shadow-2xl border border-slate-200">
+            <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-sm font-medium text-slate-700">Generando PDF...</span>
           </div>
         </div>
       )}

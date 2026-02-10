@@ -1,4 +1,5 @@
 import { AxiosError } from "axios";
+import { showToast } from "../utils/toastService";
 
 export function getErrorMessage(error: unknown, fallback = "Error desconocido"): string {
   if (error instanceof AxiosError) {
@@ -12,6 +13,6 @@ export function getErrorMessage(error: unknown, fallback = "Error desconocido"):
 
 export function handleApiError(error: unknown, fallback = "Error desconocido"): void {
   const message = getErrorMessage(error, fallback);
-  alert(message);
+  showToast(message, "error", 5000);
   console.error(fallback, error);
 }

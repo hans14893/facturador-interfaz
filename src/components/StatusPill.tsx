@@ -4,15 +4,15 @@ export default function StatusPill({ value, title }: { value: string; title?: st
   const base = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium border cursor-help";
 
   const map: Record<string, string> = {
-    ACEPTADO: "border-emerald-700 bg-emerald-950/40 text-emerald-200",
-    RECIBIDO: "border-green-600 bg-green-950/40 text-green-200",
-    PENDIENTE: "border-amber-600 bg-amber-950/40 text-amber-200",
-    PENDIENTE_ENVIO: "border-amber-700 bg-amber-950/40 text-amber-200",
-    ENVIADO: "border-cyan-700 bg-cyan-950/40 text-cyan-200",
-    RECHAZADO: "border-red-700 bg-red-950/40 text-red-200",
-    OBSERVADO: "border-purple-700 bg-purple-950/40 text-purple-200",
-    ANULADO: "border-red-600 bg-red-950/40 text-red-300",
-    CANCELADO: "border-slate-700 bg-slate-950/40 text-slate-300",
+    ACEPTADO: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    RECIBIDO: "border-green-300 bg-green-50 text-green-700",
+    PENDIENTE: "border-amber-300 bg-amber-50 text-amber-700",
+    PENDIENTE_ENVIO: "border-amber-300 bg-amber-50 text-amber-700",
+    ENVIADO: "border-cyan-300 bg-cyan-50 text-cyan-700",
+    RECHAZADO: "border-red-300 bg-red-50 text-red-700",
+    OBSERVADO: "border-purple-300 bg-purple-50 text-purple-700",
+    ANULADO: "border-red-300 bg-red-50 text-red-700",
+    CANCELADO: "border-slate-300 bg-slate-100 text-slate-600",
   };
 
   // Colores de tooltip según el estado
@@ -37,7 +37,7 @@ export default function StatusPill({ value, title }: { value: string; title?: st
 
   return (
     <span 
-      className={`${base} ${map[v] || "border-slate-700 bg-slate-950/40 text-slate-200"} group`}
+      className={`${base} ${map[v] || "border-slate-300 bg-slate-100 text-slate-600"} group`}
       style={tooltipStyle}
     >
       {v}

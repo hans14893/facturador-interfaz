@@ -36,6 +36,11 @@ export default function AdminEmpresaHomePage() {
           desc="Generar API key para integraciones."
         />
         <Quick
+          to={`/admin/empresas/${empresaId}/series`}
+          title="Series"
+          desc="Configurar series y correlativos por tipo de documento."
+        />
+        <Quick
           to={`/admin/empresas/${empresaId}/configuracion`}
           title="Configuración"
           desc="API de consulta de documentos (DNI/RUC)."

@@ -1,6 +1,9 @@
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { getAuth } from "../../auth/authStore";
+import { listEmpresas } from "../../api/adminEmpresasApi";
+import { listApiClients } from "../../api/adminApiClientsApi";
+import { getCertificadoInfo } from "../../api/adminCertificadoApi";
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
@@ -68,6 +71,50 @@ export default function AdminDashboardPage() {
     return null;
   }
 
+  // Checklist dinámico
+  const [checkEmpresa, setCheckEmpresa] = useState<boolean | null>(null);
+  const [checkApiClient, setCheckApiClient] = useState<boolean | null>(null);
+  const [checkCertificado, setCheckCertificado] = useState<boolean | null>(null);
+  const [statusLabel, setStatusLabel] = useState<string>("Verificando...");
+  const [statusColor, setStatusColor] = useState<string>("text-slate-500");
+
+  useEffect(() => {
+    async function checkAll() {
+      try {
+        const empresas = await listEmpresas();
+        const tieneEmpresa = empresas.length > 0;
+        setCheckEmpresa(tieneEmpresa);
+
+        if (tieneEmpresa) {
+          const empresaId = empresas[0].id;
+          const clients = await listApiClients(empresaId);
+          setCheckApiClient(clients.length > 0);
+
+          const cert = await getCertificadoInfo(empresaId);
+          setCheckCertificado(cert !== null && cert.vigente === true);
+        } else {
+          setCheckApiClient(false);
+          setCheckCertificado(false);
+        }
+      } catch {
+        // Si falla, dejar como no verificado
+      }
+    }
+    checkAll();
+  }, []);
+
+  useEffect(() => {
+    if (checkEmpresa === null) return;
+    const all = checkEmpresa && checkApiClient && checkCertificado;
+    if (all) {
+      setStatusLabel("Activo");
+      setStatusColor("text-emerald-700");
+    } else {
+      setStatusLabel("Configuración incompleta");
+      setStatusColor("text-amber-600");
+    }
+  }, [checkEmpresa, checkApiClient, checkCertificado]);
+
   return (
     <>
       {/* Hero */}
@@ -90,7 +137,7 @@ export default function AdminDashboardPage() {
           <div className="grid grid-cols-2 gap-3 sm:w-[320px]">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-xs font-semibold text-slate-500">Estado</div>
-              <div className="mt-1 text-sm font-bold text-emerald-700">Activo</div>
+              <div className={`mt-1 text-sm font-bold ${statusColor}`}>{statusLabel}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-xs font-semibold text-slate-500">Acceso</div>
@@ -191,28 +238,38 @@ export default function AdminDashboardPage() {
 
             <ul className="mt-4 space-y-3 text-sm text-slate-700">
               <li className="flex gap-2">
-                <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span>Crear empresa y usuarios (ADMIN / USER)</span>
+                {checkEmpresa === null ? (
+                  <svg className="animate-spin h-4 w-4 mt-0.5 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                ) : checkEmpresa ? (
+                  <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                ) : (
+                  <svg className="h-4 w-4 mt-0.5 text-slate-300 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
+                )}
+                <span className={checkEmpresa === false ? "text-slate-400" : ""}>Crear empresa y usuarios (ADMIN / USER)</span>
               </li>
               <li className="flex gap-2">
-                <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span>Generar API Client (id:secret) para integraciones</span>
+                {checkApiClient === null ? (
+                  <svg className="animate-spin h-4 w-4 mt-0.5 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                ) : checkApiClient ? (
+                  <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                ) : (
+                  <svg className="h-4 w-4 mt-0.5 text-slate-300 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
+                )}
+                <span className={checkApiClient === false ? "text-slate-400" : ""}>Generar API Client (id:secret) para integraciones</span>
               </li>
               <li className="flex gap-2">
-                <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span>Subir certificado PFX para firma de XML</span>
+                {checkCertificado === null ? (
+                  <svg className="animate-spin h-4 w-4 mt-0.5 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                ) : checkCertificado ? (
+                  <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                ) : (
+                  <svg className="h-4 w-4 mt-0.5 text-slate-300 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
+                )}
+                <span className={checkCertificado === false ? "text-slate-400" : ""}>Subir certificado PFX para firma de XML</span>
               </li>
               <li className="flex gap-2">
-                <svg className="h-4 w-4 mt-0.5 text-emerald-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span>Probar emisión / envío SUNAT (mock o beta)</span>
+                <svg className="h-4 w-4 mt-0.5 text-slate-300 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
+                <span className="text-slate-400">Probar emisión / envío SUNAT (mock o beta)</span>
               </li>
             </ul>
           </div>

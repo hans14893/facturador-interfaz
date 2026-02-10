@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { listEmpresas } from "../../../api/adminEmpresasApi";
 import type { Empresa } from "../../../api/adminEmpresasApi";
 import { getErrorMessage } from "../../../api/errorHelper";
@@ -149,6 +150,20 @@ export default function AdminEmpresasPage() {
                     <td className="px-4 py-3 text-sm text-slate-600">{empresa.nombreComercial || "-"}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <Link
+                          to={`/admin/empresas/${empresa.id}`}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          title="Abrir empresa"
+                        >
+                          Abrir
+                        </Link>
+                        <Link
+                          to={`/admin/empresas/${empresa.id}/series`}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          title="Gestionar series"
+                        >
+                          Series
+                        </Link>
                         <button
                           onClick={() => openEditModal(empresa)}
                           className={btnEditSm}
