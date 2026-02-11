@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getMyEmpresa, updateMyEmpresa, uploadMyLogo, getMyLogoUrl } from "../../../api/adminEmpresasApi";
+import { getMyCertificadoInfo, uploadMyCertificado, type CertificadoInfo } from "../../../api/empresaCertificadoApi";
 import type { Empresa } from "../../../api/adminEmpresasApi";
 import { getErrorMessage } from "../../../api/errorHelper";
 
@@ -27,9 +28,18 @@ export default function ConfiguracionEmpresaPage() {
   });
   
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const [certPassword, setCertPassword] = useState("");
+  const [showCertPassword, setShowCertPassword] = useState(false);
+  const [certInfo, setCertInfo] = useState<CertificadoInfo | null>(null);
+  const [certLoading, setCertLoading] = useState(false);
+  const [certUploading, setCertUploading] = useState(false);
+  const [certErr, setCertErr] = useState<string | null>(null);
+  const [certMsg, setCertMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadEmpresa();
+    void loadCertInfo();
   }, []);
 
   async function loadEmpresa() {
@@ -67,6 +77,19 @@ export default function ConfiguracionEmpresaPage() {
       setErr(getErrorMessage(e, "Error cargando datos de la empresa"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadCertInfo() {
+    setCertLoading(true);
+    setCertErr(null);
+    try {
+      const info = await getMyCertificadoInfo();
+      setCertInfo(info);
+    } catch (e: unknown) {
+      setCertErr(getErrorMessage(e, "Error cargando certificado"));
+    } finally {
+      setCertLoading(false);
     }
   }
 
@@ -127,6 +150,58 @@ export default function ConfiguracionEmpresaPage() {
       setSaving(false);
     }
   };
+
+  const handleCertUpload = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e?.preventDefault) e.preventDefault();
+    setCertErr(null);
+    setCertMsg(null);
+
+    if (!certFile) {
+      setCertErr("Selecciona un .pfx");
+      return;
+    }
+    if (!certPassword.trim()) {
+      setCertErr("Password requerido");
+      return;
+    }
+
+    setCertUploading(true);
+    try {
+      const resp = await uploadMyCertificado(certFile, certPassword.trim());
+      setCertMsg(typeof resp === "string" ? resp : "Certificado subido");
+      setCertFile(null);
+      setCertPassword("");
+      await loadCertInfo();
+    } catch (e: unknown) {
+      setCertErr(getErrorMessage(e, "Error subiendo certificado"));
+    } finally {
+      setCertUploading(false);
+    }
+  };
+
+  const formatCertDate = (value?: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("es-PE", { year: "numeric", month: "long", day: "2-digit" });
+  };
+
+  const certDaysLeft = (() => {
+    if (!certInfo?.fechaVencimiento) return null;
+    const date = new Date(certInfo.fechaVencimiento);
+    if (Number.isNaN(date.getTime())) return null;
+    const today = new Date();
+    const end = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffMs = end.getTime() - start.getTime();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  })();
+
+  const certExpiringSoon = typeof certDaysLeft === "number" && certDaysLeft <= 30 && certDaysLeft >= 0;
+  const certStatus = certInfo?.vigente ? "Vigente" : "Vencido";
+  const certStatusClass = certInfo?.vigente
+    ? "bg-emerald-100 text-emerald-700"
+    : "bg-rose-100 text-rose-700";
 
   if (loading) {
     return (
@@ -369,14 +444,145 @@ export default function ConfiguracionEmpresaPage() {
                   Subir Logo
                 </label>
                 <input
+                  id="logo-file"
                   type="file"
                   accept="image/*"
                   onChange={handleLogoChange}
-                  className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="sr-only"
                 />
+                <div className="flex items-center gap-3">
+                  <label
+                    htmlFor="logo-file"
+                    className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Seleccionar archivo
+                  </label>
+                  <span className="text-xs text-slate-500">
+                    {logoFile?.name ?? "Ningun archivo seleccionado"}
+                  </span>
+                </div>
                 <p className="mt-2 text-xs text-slate-500">
                   Formatos permitidos: JPG, PNG. Tamaño máximo: 2MB
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Certificado */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Certificado Digital</h2>
+                <p className="text-xs text-slate-500">Sube el PFX/P12 y guarda el password de forma segura.</p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${certInfo ? certStatusClass : "bg-slate-100 text-slate-600"}`}>
+                  {certInfo ? certStatus : "Sin certificado"}
+                </span>
+                {certInfo?.fechaVencimiento && (
+                  <span>Vence: {formatCertDate(certInfo.fechaVencimiento)}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Archivo PFX/P12</label>
+                  <input
+                    id="cert-file"
+                    type="file"
+                    accept=".pfx,.p12"
+                    onChange={(e) => setCertFile(e.target.files?.[0] ?? null)}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center gap-3">
+                    <label
+                      htmlFor="cert-file"
+                      className="inline-flex cursor-pointer items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:opacity-95"
+                    >
+                      Seleccionar archivo
+                    </label>
+                    <span className="text-xs text-slate-500">
+                      {certFile?.name ?? "Ningún archivo seleccionado"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Formatos permitidos: .pfx, .p12</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type={showCertPassword ? "text" : "password"}
+                      value={certPassword}
+                      onChange={(e) => setCertPassword(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCertPassword((v) => !v)}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      {showCertPassword ? "Ocultar" : "Mostrar"}
+                    </button>
+                  </div>
+                </div>
+
+                {certErr && (
+                  <div className="rounded-xl bg-red-100 px-4 py-3 text-sm text-red-700">
+                    {certErr}
+                  </div>
+                )}
+                {certMsg && (
+                  <div className="rounded-xl bg-green-100 px-4 py-3 text-sm text-green-700">
+                    {certMsg}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleCertUpload}
+                  disabled={certUploading}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-60"
+                >
+                  {certUploading ? "Subiendo..." : "Subir certificado"}
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-semibold text-slate-900">Estado del certificado</div>
+                {certLoading ? (
+                  <div className="mt-2 text-sm text-slate-500">Cargando...</div>
+                ) : certInfo ? (
+                  <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                    <div>Vigencia: {certStatus}</div>
+                    <div>Vence: {formatCertDate(certInfo.fechaVencimiento)}</div>
+                    <div>
+                      Días restantes:{" "}
+                      {typeof certDaysLeft === "number" ? (
+                        <span className={certExpiringSoon ? "font-semibold text-amber-700" : "font-semibold text-slate-700"}>
+                          {certDaysLeft}
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </div>
+                    <div>Titular: {certInfo.nombreTitular ?? "-"}</div>
+                    <div>RUC: {certInfo.rucTitular ?? "-"}</div>
+                    {certExpiringSoon && (
+                      <div className="mt-1 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">
+                        El certificado vence pronto. Te recomendamos renovarlo.
+                      </div>
+                    )}
+                    {!certInfo.vigente && (
+                      <div className="mt-1 rounded-lg bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800">
+                        Certificado vencido. Sube uno nuevo para emitir comprobantes.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 text-sm text-slate-500">No hay certificado activo.</div>
+                )}
               </div>
             </div>
           </div>

@@ -246,11 +246,11 @@ export default function AdminEmpresasPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          to={`/admin/empresas/${empresa.id}`}
+                          to={`/admin/empresas/${empresa.id}/api-clients`}
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                          title="Abrir empresa"
+                          title="Gestionar API clientes"
                         >
-                          Abrir
+                          API Clientes
                         </Link>
                         <Link
                           to={`/admin/empresas/${empresa.id}/series`}
