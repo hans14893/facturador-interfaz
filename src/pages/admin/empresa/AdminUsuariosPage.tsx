@@ -17,7 +17,7 @@ export default function AdminUsuariosPage() {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(["USER"]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(["CLIENTE"]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [usuarioToDelete, setUsuarioToDelete] = useState<Usuario | null>(null);
@@ -49,7 +49,7 @@ export default function AdminUsuariosPage() {
     setErr(null);
     try {
       await createUsuario(empresaId, { username, password, nombre, email, telefono, roles: selectedRoles });
-      setUsername(""); setPassword(""); setNombre(""); setEmail(""); setTelefono("");
+      setUsername(""); setPassword(""); setNombre(""); setEmail(""); setTelefono(""); setSelectedRoles(["CLIENTE"]);
       await refresh();
     } catch (e: unknown) {
       setErr(getErrorMessage(e, "Error creando usuario"));
@@ -123,7 +123,7 @@ export default function AdminUsuariosPage() {
             <div className="rounded-xl border border-slate-200 bg-white p-3">
               <div className="text-xs font-semibold text-slate-600">Roles</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {(roles.length ? roles : ["ADMIN", "USER"]).map((r) => {
+                {(roles.length ? roles : ["ADMIN", "CLIENTE"]).map((r) => {
                   const active = selectedRoles.includes(r);
                   return (
                     <button
