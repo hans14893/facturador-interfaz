@@ -1,7 +1,26 @@
 import { useEffect, useState, useCallback } from 'react';
 import { WifiOff, Clock, RefreshCw } from 'lucide-react';
-import { http } from '../api/http';
 import { getAuth } from '../auth/authStore';
+
+async function pingServer(timeoutMs = 7000): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch('/api/v1/health', {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    // Cualquier respuesta HTTP implica que hay conectividad con el servidor.
+    return !!response;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export function ConnectionStatus() {
   const [isConnected, setIsConnected] = useState(true);
@@ -9,12 +28,8 @@ export function ConnectionStatus() {
   const [retrying, setRetrying] = useState(false);
 
   const checkConnection = useCallback(async () => {
-    try {
-      await http.get('/api/v1/health', { timeout: 3000 });
-      setIsConnected(true);
-    } catch {
-      setIsConnected(false);
-    }
+    const online = await pingServer();
+    setIsConnected(online);
   }, []);
 
   const handleRetry = useCallback(async () => {
@@ -27,12 +42,8 @@ export function ConnectionStatus() {
     let mounted = true;
 
     const check = async () => {
-      try {
-        await http.get('/api/v1/health', { timeout: 3000 });
-        if (mounted) setIsConnected(true);
-      } catch {
-        if (mounted) setIsConnected(false);
-      }
+      const online = await pingServer();
+      if (mounted) setIsConnected(online);
     };
 
     const checkTokenExpiration = () => {
