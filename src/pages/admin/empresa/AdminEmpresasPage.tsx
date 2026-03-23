@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listEmpresas, createEmpresa } from "../../../api/adminEmpresasApi";
+import { listEmpresas, createEmpresa, updateEmpresa } from "../../../api/adminEmpresasApi";
 import type { Empresa } from "../../../api/adminEmpresasApi";
 import { getErrorMessage } from "../../../api/errorHelper";
 
@@ -11,6 +11,7 @@ export default function AdminEmpresasPage() {
 
   // --- formulario nueva empresa ---
   const [showForm, setShowForm] = useState(false);
+  const [editingEmpresaId, setEditingEmpresaId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -20,14 +21,47 @@ export default function AdminEmpresasPage() {
     direccion: "",
     sunatAmbiente: "BETA" as "BETA" | "PROD",
     igvPorcentaje: 18,
+    sunatSolUsuario: "",
+    sunatSolClave: "",
   });
 
   function resetForm() {
-    setForm({ ruc: "", razonSocial: "", nombreComercial: "", direccion: "", sunatAmbiente: "BETA", igvPorcentaje: 18 });
+    setForm({
+      ruc: "",
+      razonSocial: "",
+      nombreComercial: "",
+      direccion: "",
+      sunatAmbiente: "BETA",
+      igvPorcentaje: 18,
+      sunatSolUsuario: "",
+      sunatSolClave: "",
+    });
     setFormErr(null);
+    setEditingEmpresaId(null);
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreateForm() {
+    resetForm();
+    setShowForm(true);
+  }
+
+  function openEditForm(empresa: Empresa) {
+    setEditingEmpresaId(empresa.id);
+    setForm({
+      ruc: empresa.ruc ?? "",
+      razonSocial: empresa.razonSocial ?? "",
+      nombreComercial: empresa.nombreComercial ?? "",
+      direccion: empresa.direccion ?? "",
+      sunatAmbiente: empresa.sunatAmbiente ?? "BETA",
+      igvPorcentaje: empresa.igvPorcentaje ?? 18,
+      sunatSolUsuario: empresa.sunatSolUsuario ?? "",
+      sunatSolClave: "",
+    });
+    setFormErr(null);
+    setShowForm(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.ruc.trim() || !form.razonSocial.trim()) {
       setFormErr("RUC y Razón Social son obligatorios");
@@ -36,19 +70,34 @@ export default function AdminEmpresasPage() {
     setSaving(true);
     setFormErr(null);
     try {
-      await createEmpresa({
-        ruc: form.ruc.trim(),
-        razonSocial: form.razonSocial.trim(),
-        nombreComercial: form.nombreComercial.trim() || undefined,
-        direccion: form.direccion.trim() || undefined,
-        sunatAmbiente: form.sunatAmbiente,
-        igvPorcentaje: form.igvPorcentaje,
-      });
+      if (editingEmpresaId) {
+        await updateEmpresa(editingEmpresaId, {
+          ruc: form.ruc.trim(),
+          razonSocial: form.razonSocial.trim(),
+          nombreComercial: form.nombreComercial.trim() || undefined,
+          direccion: form.direccion.trim() || undefined,
+          sunatAmbiente: form.sunatAmbiente,
+          igvPorcentaje: form.igvPorcentaje,
+          sunatSolUsuario: form.sunatSolUsuario.trim() || undefined,
+          sunatSolClave: form.sunatSolClave.trim() || undefined,
+        });
+      } else {
+        await createEmpresa({
+          ruc: form.ruc.trim(),
+          razonSocial: form.razonSocial.trim(),
+          nombreComercial: form.nombreComercial.trim() || undefined,
+          direccion: form.direccion.trim() || undefined,
+          sunatAmbiente: form.sunatAmbiente,
+          igvPorcentaje: form.igvPorcentaje,
+          sunatSolUsuario: form.sunatSolUsuario.trim() || undefined,
+          sunatSolClave: form.sunatSolClave.trim() || undefined,
+        });
+      }
       resetForm();
       setShowForm(false);
       await loadEmpresas();
     } catch (e: unknown) {
-      setFormErr(getErrorMessage(e, "Error creando empresa"));
+      setFormErr(getErrorMessage(e, editingEmpresaId ? "Error actualizando empresa" : "Error creando empresa"));
     } finally {
       setSaving(false);
     }
@@ -80,7 +129,14 @@ export default function AdminEmpresasPage() {
           </p>
         </div>
         <button
-          onClick={() => { setShowForm((v) => !v); if (!showForm) resetForm(); }}
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              resetForm();
+            } else {
+              openCreateForm();
+            }
+          }}
           className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors"
         >
           {showForm ? "Cancelar" : "+ Nueva Empresa"}
@@ -89,8 +145,10 @@ export default function AdminEmpresasPage() {
 
       {/* ── Formulario crear empresa ── */}
       {showForm && (
-        <form onSubmit={handleCreate} className="mt-6 rounded-xl border border-slate-200 bg-white p-6 space-y-4">
-          <h2 className="text-lg font-bold text-slate-900">Crear nueva empresa</h2>
+        <form onSubmit={handleSubmit} className="mt-6 rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+          <h2 className="text-lg font-bold text-slate-900">
+            {editingEmpresaId ? `Editar empresa #${editingEmpresaId}` : "Crear nueva empresa"}
+          </h2>
 
           {formErr && (
             <div className="rounded-lg bg-red-100 px-4 py-2 text-sm text-red-700">{formErr}</div>
@@ -163,6 +221,28 @@ export default function AdminEmpresasPage() {
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">Usuario SOL</label>
+              <input
+                type="text"
+                value={form.sunatSolUsuario}
+                onChange={(e) => setForm({ ...form, sunatSolUsuario: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="HANS1489 o 10462016927HANS1489"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">
+                Clave SOL {editingEmpresaId ? "(opcional para cambiar)" : ""}
+              </label>
+              <input
+                type="password"
+                value={form.sunatSolClave}
+                onChange={(e) => setForm({ ...form, sunatSolClave: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder={editingEmpresaId ? "Dejar vacío para mantener" : "Ingresa clave SOL"}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -178,7 +258,7 @@ export default function AdminEmpresasPage() {
               disabled={saving}
               className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
             >
-              {saving ? "Guardando..." : "Crear Empresa"}
+              {saving ? "Guardando..." : editingEmpresaId ? "Actualizar Empresa" : "Crear Empresa"}
             </button>
           </div>
         </form>
@@ -213,7 +293,7 @@ export default function AdminEmpresasPage() {
             Aún no se ha creado ninguna empresa
           </div>
           <button
-            onClick={() => { setShowForm(true); resetForm(); }}
+            onClick={openCreateForm}
             className="mt-4 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors"
           >
             + Crear Primera Empresa
@@ -273,6 +353,13 @@ export default function AdminEmpresasPage() {
                         >
                           Certificado
                         </Link>
+                        <button
+                          onClick={() => openEditForm(empresa)}
+                          className="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                          title="Editar empresa"
+                        >
+                          Editar
+                        </button>
                       </div>
                     </td>
                   </tr>

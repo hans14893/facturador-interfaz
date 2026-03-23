@@ -19,6 +19,7 @@ export type Empresa = {
   activo?: boolean;
   apiConsultaUrl?: string;
   apiConsultaToken?: string;
+  sunatSolUsuario?: string;
 };
 
 export async function listEmpresas(): Promise<Empresa[]> {
@@ -38,6 +39,8 @@ export async function createEmpresa(payload: {
   direccion?: string;
   sunatAmbiente?: "BETA" | "PROD";
   igvPorcentaje?: number;
+  sunatSolUsuario?: string;
+  sunatSolClave?: string;
 }): Promise<Empresa> {
   const { data } = await http.post("/api/v1/admin/empresas", payload);
   return data;
@@ -52,6 +55,8 @@ export async function updateEmpresa(id: number, payload: {
   igvPorcentaje?: number;
   apiConsultaUrl?: string;
   apiConsultaToken?: string;
+  sunatSolUsuario?: string;
+  sunatSolClave?: string;
 }): Promise<Empresa> {
   const { data } = await http.put(`/api/v1/admin/empresas/${id}`, payload);
   return data;

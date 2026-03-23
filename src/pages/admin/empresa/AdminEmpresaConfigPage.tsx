@@ -8,7 +8,10 @@ export default function AdminEmpresaConfigPage() {
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [apiUrl, setApiUrl] = useState("");
   const [apiToken, setApiToken] = useState("");
+  const [solUsuario, setSolUsuario] = useState("");
+  const [solClave, setSolClave] = useState("");
   const [showToken, setShowToken] = useState(false);
+  const [showSolClave, setShowSolClave] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -19,6 +22,8 @@ export default function AdminEmpresaConfigPage() {
       setEmpresa(data);
       setApiUrl(data.apiConsultaUrl || "https://api.perudevs.com/api/v1");
       setApiToken(data.apiConsultaToken || "");
+      setSolUsuario(data.sunatSolUsuario || "");
+      setSolClave("");
     } catch (err) {
       console.error(err);
     }
@@ -39,8 +44,11 @@ export default function AdminEmpresaConfigPage() {
       await updateEmpresa(Number(empresaId), {
         apiConsultaUrl: apiUrl,
         apiConsultaToken: apiToken,
+        sunatSolUsuario: solUsuario.trim() || undefined,
+        sunatSolClave: solClave.trim() || undefined,
       });
       setSuccess(true);
+      setSolClave("");
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: unknown) {
       if (err instanceof AxiosError) {
@@ -110,6 +118,46 @@ export default function AdminEmpresaConfigPage() {
             </p>
           </div>
 
+          <div className="mt-6 border-t border-slate-200 pt-6">
+            <h3 className="text-sm font-semibold text-slate-900">Credenciales SOL (SUNAT)</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Configura el usuario secundario de SUNAT para envíos SOAP. El sistema arma el username como RUC+usuario cuando corresponde.
+            </p>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Usuario SOL</label>
+                <input
+                  type="text"
+                  value={solUsuario}
+                  onChange={(e) => setSolUsuario(e.target.value)}
+                  placeholder="Ej: HANS1489 o 10462016927HANS1489"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Clave SOL (opcional para cambiar)</label>
+                <div className="relative mt-1">
+                  <input
+                    type={showSolClave ? "text" : "password"}
+                    value={solClave}
+                    onChange={(e) => setSolClave(e.target.value)}
+                    placeholder="Dejar en blanco para mantener la clave actual"
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 pr-20 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSolClave(!showSolClave)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                  >
+                    {showSolClave ? "Ocultar" : "Ver"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {error && (
             <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
@@ -148,6 +196,7 @@ export default function AdminEmpresaConfigPage() {
             <li>• Esta configuración permite consultar DNI y RUC automáticamente al crear clientes</li>
             <li>• El sistema usa estos valores cuando se presiona el botón "EXTRAER" en el formulario</li>
             <li>• Si no se configura, se usarán valores por defecto (PeruDevs API)</li>
+            <li>• Para SUNAT SOAP, completa Usuario SOL y Clave SOL en esta misma pantalla</li>
             <li>• Endpoint RUC: {apiUrl}/ruc?document=XX&key=TOKEN</li>
             <li>• Endpoint DNI: {apiUrl}/dni/simple?document=XX&key=TOKEN</li>
           </ul>
