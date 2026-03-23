@@ -8,7 +8,28 @@ import { getAuth } from "../auth/authStore";
 import * as XLSX from "xlsx-js-style";
 
 type TipoDoc = "SUNAT_CPE" | "ALL" | "01" | "03" | "07" | "08"; // 01 Factura, 03 Boleta, 07 NC, 08 ND
-type Estado = "ALL" | "ACEPTADO" | "RECHAZADO" | "PENDIENTE" | "ANULADO" | "ENVIADO";
+type Estado =
+  | "ALL"
+  | "ACEPTADO"
+  | "RECHAZADO"
+  | "PENDIENTE"
+  | "PENDIENTE_ENVIO"
+  | "PENDIENTE_BAJA"
+  | "ERROR"
+  | "ANULADO"
+  | "ENVIADO";
+
+function matchesEstadoFilter(estadoComprobante: string, estadoFiltro: Estado): boolean {
+  if (estadoFiltro === "ALL") return true;
+
+  const estado = (estadoComprobante || "").toUpperCase();
+
+  if (estadoFiltro === "PENDIENTE") {
+    return estado === "PENDIENTE" || estado === "PENDIENTE_ENVIO" || estado === "PENDIENTE_BAJA";
+  }
+
+  return estado === estadoFiltro;
+}
 
 function toInputDate(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -261,7 +282,7 @@ export default function ComprobantesPage() {
       }
 
       // estado
-      if (appliedEstado !== "ALL" && (r.estado || "").toUpperCase() !== appliedEstado)
+      if (!matchesEstadoFilter(r.estado || "", appliedEstado))
         return false;
 
       // entidad
@@ -708,7 +729,10 @@ export default function ComprobantesPage() {
                 <option value="ALL">Todos</option>
                 <option value="ACEPTADO">Aceptado</option>
                 <option value="PENDIENTE">Pendiente</option>
+                <option value="PENDIENTE_ENVIO">Pendiente de envío</option>
+                <option value="PENDIENTE_BAJA">Pendiente de baja</option>
                 <option value="RECHAZADO">Rechazado</option>
+                <option value="ERROR">Error</option>
                 <option value="ENVIADO">Enviado</option>
                 <option value="ANULADO">Anulado</option>
               </select>
