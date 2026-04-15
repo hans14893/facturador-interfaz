@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { AxiosError } from "axios";
 import { listComprobantes } from "../api/comprobantesApi";
-import type { Comprobante, PageResponse } from "../api/comprobantesApi";
+import type { Comprobante } from "../api/comprobantesApi";
 import StatusPill from "../components/StatusPill";
 import Modal from "../components/Modal";
 import { getAuth } from "../auth/authStore";
@@ -34,6 +34,30 @@ function matchesEstadoFilter(estadoComprobante: string, estadoFiltro: Estado): b
 function toInputDate(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function toDisplayDate(value?: string | Date) {
+  if (!value) return "-";
+
+  if (value instanceof Date) {
+    const day = String(value.getDate()).padStart(2, "0");
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const year = String(value.getFullYear());
+    return `${day}/${month}/${year}`;
+  }
+
+  const datePart = value.split("T")[0];
+  const [year, month, day] = datePart.split("-");
+  if (year && month && day) {
+    return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  const d = String(parsed.getDate()).padStart(2, "0");
+  const m = String(parsed.getMonth() + 1).padStart(2, "0");
+  const y = String(parsed.getFullYear());
+  return `${d}/${m}/${y}`;
 }
 
 function money(v: unknown) {
@@ -247,6 +271,46 @@ export default function ComprobantesPage() {
     }
   }
 
+  function filterComprobantes(data: Comprobante[]) {
+    const q = appliedQEntidad.trim().toLowerCase();
+
+    return data.filter((r) => {
+      if (!r.fechaEmision) return false;
+      const fechaComp = r.fechaEmision.split("T")[0];
+      if (fechaComp < appliedDesde || fechaComp > appliedHasta) return false;
+
+      if (appliedTipoDoc === "ALL") {
+        if (r.tipoDoc !== "01" && r.tipoDoc !== "03" && r.tipoDoc !== "07" && r.tipoDoc !== "08") return false;
+      } else if (appliedTipoDoc === "SUNAT_CPE") {
+        if (r.tipoDoc !== "01" && r.tipoDoc !== "03") return false;
+      } else if (r.tipoDoc !== appliedTipoDoc) {
+        return false;
+      }
+
+      if (!matchesEstadoFilter(r.estado || "", appliedEstado)) return false;
+
+      if (q) {
+        const nombre = (r.receptorNombre || "").toLowerCase();
+        const doc = (r.receptorNroDoc || "").toLowerCase();
+        if (!nombre.includes(q) && !doc.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }
+
+  async function getAllComprobantesForReport(): Promise<Comprobante[]> {
+    const firstPage = await listComprobantes(0, PAGE_SIZE);
+    const allRows = [...firstPage.content];
+
+    for (let page = 1; page < firstPage.totalPages; page++) {
+      const nextPage = await listComprobantes(page, PAGE_SIZE);
+      allRows.push(...nextPage.content);
+    }
+
+    return allRows;
+  }
+
   useEffect(() => {
     load();
   }, []);
@@ -262,40 +326,7 @@ export default function ComprobantesPage() {
 
   // ? Filtrado en frontend (temporal). Luego lo mandas al backend.
   const filtered = useMemo(() => {
-    const q = appliedQEntidad.trim().toLowerCase();
-
-    const result = rows.filter((r) => {
-      // fecha - comparar solo la parte de fecha sin hora
-      if (!r.fechaEmision) return false;
-      const fechaComp = r.fechaEmision.split('T')[0]; // "2026-01-09"
-      if (fechaComp < appliedDesde || fechaComp > appliedHasta) return false;
-
-      // tipo doc
-      if (appliedTipoDoc === "ALL") {
-        // "Todos" = solo documentos SUNAT (01, 03, 07, 08)
-        if (r.tipoDoc !== "01" && r.tipoDoc !== "03" && r.tipoDoc !== "07" && r.tipoDoc !== "08") return false;
-      } else if (appliedTipoDoc === "SUNAT_CPE") {
-        // Solo Facturas y Boletas
-        if (r.tipoDoc !== "01" && r.tipoDoc !== "03") return false;
-      } else {
-        if (r.tipoDoc !== appliedTipoDoc) return false;
-      }
-
-      // estado
-      if (!matchesEstadoFilter(r.estado || "", appliedEstado))
-        return false;
-
-      // entidad
-      if (q) {
-        const nombre = (r.receptorNombre || "").toLowerCase();
-        const doc = (r.receptorNroDoc || "").toLowerCase();
-        if (!nombre.includes(q) && !doc.includes(q)) return false;
-      }
-
-      return true;
-    });
-    
-    return result;
+    return filterComprobantes(rows);
   }, [rows, appliedDesde, appliedHasta, appliedTipoDoc, appliedEstado, appliedQEntidad]);
 
   // Paginación (ahora server-side, filtrado aún en cliente)
@@ -356,7 +387,38 @@ export default function ComprobantesPage() {
     return "-";
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    let reportRows: Comprobante[] = filtered;
+
+    try {
+      setErr(null);
+      setLoading(true);
+      const allRows = await getAllComprobantesForReport();
+      reportRows = filterComprobantes(allRows);
+    } catch {
+      setErr("No se pudo generar el reporte completo. Intenta nuevamente.");
+      return;
+    } finally {
+      setLoading(false);
+    }
+
+    if (reportRows.length === 0) {
+      setErr("No hay comprobantes para exportar en el rango seleccionado.");
+      return;
+    }
+
+    const reportTotals = reportRows.reduce(
+      (acc, r) => {
+        const t = Number(r.total || 0);
+        if (r.tipoDoc === "01") acc.facturas += t;
+        else if (r.tipoDoc === "03") acc.boletas += t;
+        else if (r.tipoDoc === "07") acc.notasCredito += t;
+        else if (r.tipoDoc === "08") acc.notasDebito += t;
+        return acc;
+      },
+      { facturas: 0, boletas: 0, notasCredito: 0, notasDebito: 0 },
+    );
+
     // Estilos para el encabezado
     const headerStyle = {
       font: { bold: true, color: { rgb: "FFFFFF" }, sz: 10 },
@@ -448,7 +510,7 @@ export default function ComprobantesPage() {
 
     // Título
     wsData.push(["REPORTE DE COMPROBANTES ELECTRÓNICOS"]);
-    wsData.push([`Período: ${new Date(appliedDesde).toLocaleDateString("es-PE")} al ${new Date(appliedHasta).toLocaleDateString("es-PE")}`]);
+    wsData.push([`Período: ${toDisplayDate(appliedDesde)} al ${toDisplayDate(appliedHasta)}`]);
     wsData.push([`Generado: ${new Date().toLocaleString("es-PE")}`]);
     wsData.push([]); // Fila vacía
 
@@ -485,7 +547,7 @@ export default function ComprobantesPage() {
     wsData.push(headers);
 
     // Datos
-    filtered.forEach((r) => {
+    reportRows.forEach((r) => {
       const esAceptado = (r.estado || "").toUpperCase() === "ACEPTADO";
       const estadoUpper = (r.estado || "").toUpperCase();
       
@@ -496,8 +558,8 @@ export default function ComprobantesPage() {
       }
       
       wsData.push([
-        r.fechaEmision ? new Date(r.fechaEmision).toLocaleDateString("es-PE") : "-",
-        r.fechaVencimiento ? new Date(r.fechaVencimiento).toLocaleDateString("es-PE") : "-",
+        toDisplayDate(r.fechaEmision),
+        toDisplayDate(r.fechaVencimiento),
         r.tipoDoc || "-",
         r.serie || "-",
         r.correlativo || 0,
@@ -527,11 +589,11 @@ export default function ComprobantesPage() {
 
     // Totales por tipo de documento - Posicionados correctamente debajo de la columna TOTAL (índice 13)
     const totalRow = wsData.length;
-    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL FACTURAS:", totals.facturas]);
-    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL BOLETAS:", totals.boletas]);
-    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL NC:", totals.notasCredito]);
-    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL ND:", totals.notasDebito]);
-    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL GENERAL:", totals.facturas + totals.boletas - totals.notasCredito + totals.notasDebito]);
+    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL FACTURAS:", reportTotals.facturas]);
+    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL BOLETAS:", reportTotals.boletas]);
+    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL NC:", reportTotals.notasCredito]);
+    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL ND:", reportTotals.notasDebito]);
+    wsData.push([null, null, null, null, null, null, null, null, null, null, null, null, "TOTAL GENERAL:", reportTotals.facturas + reportTotals.boletas - reportTotals.notasCredito + reportTotals.notasDebito]);
 
     // Crear worksheet
     const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -683,7 +745,6 @@ export default function ComprobantesPage() {
               </svg>
               Refrescar
             </button>
-            {/* Botón de prueba removido */}
           </div>
       </div>
 
@@ -770,7 +831,7 @@ export default function ComprobantesPage() {
                   Filtrar
                 </button>
                 <button
-                  onClick={exportExcel}
+                  onClick={() => { void exportExcel(); }}
                   className="rounded-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors flex items-center gap-2"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -793,6 +854,7 @@ export default function ComprobantesPage() {
                 </button>
               </div>
             </div>
+          </div>
           </div>
 
       {/* Estado carga / error */}
@@ -845,7 +907,7 @@ export default function ComprobantesPage() {
                           ].join(" ")}
                         >
                           <td className="px-2 py-1.5 whitespace-nowrap text-slate-700">
-                            <span className={strike}>{new Date(r.fechaEmision).toLocaleDateString("es-PE")}</span>
+                            <span className={strike}>{toDisplayDate(r.fechaEmision)}</span>
                           </td>
 
                           <td className="px-2 py-1.5 whitespace-nowrap">
@@ -996,7 +1058,7 @@ export default function ComprobantesPage() {
                       </div>
                       <div className="text-xs text-slate-500">
                         <span className={r.anulado ? "line-through" : ""}>
-                          {new Date(r.fechaEmision).toLocaleDateString("es-PE")}
+                          {toDisplayDate(r.fechaEmision)}
                         </span>
                       </div>
                     </div>
@@ -1189,7 +1251,6 @@ export default function ComprobantesPage() {
             </div>
           </div>
         )}
-      </div>
 
       {/* Overlay de carga PDF */}
       {pdfLoading && (
