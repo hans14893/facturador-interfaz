@@ -15,7 +15,12 @@ export default function ConfiguracionEmpresaPage() {
     ruc: "",
     razonSocial: "",
     nombreComercial: "",
+    ubigeo: "",
+    codigoLocalAnexo: "0000",
     direccion: "",
+    departamento: "",
+    provincia: "",
+    distrito: "",
     telefono: "",
     email: "",
     igvPorcentaje: 18,
@@ -52,7 +57,12 @@ export default function ConfiguracionEmpresaPage() {
         ruc: data.ruc || "",
         razonSocial: data.razonSocial || "",
         nombreComercial: data.nombreComercial || "",
+        ubigeo: data.ubigeo || "",
+        codigoLocalAnexo: data.codigoLocalAnexo || "0000",
         direccion: data.direccion || "",
+        departamento: data.departamento || "",
+        provincia: data.provincia || "",
+        distrito: data.distrito || "",
         telefono: data.telefono || "",
         email: data.email || "",
         igvPorcentaje: data.igvPorcentaje || 18,
@@ -127,7 +137,12 @@ export default function ConfiguracionEmpresaPage() {
         ruc: formData.ruc,
         razonSocial: formData.razonSocial,
         nombreComercial: formData.nombreComercial,
+        ubigeo: formData.ubigeo,
+        codigoLocalAnexo: formData.codigoLocalAnexo,
         direccion: formData.direccion,
+        departamento: formData.departamento,
+        provincia: formData.provincia,
+        distrito: formData.distrito,
         igvPorcentaje: formData.igvPorcentaje,
         usarStock: formData.usarStock,
         noVenderStockCero: formData.noVenderStockCero,
@@ -282,6 +297,76 @@ export default function ConfiguracionEmpresaPage() {
                   type="text"
                   value={formData.direccion}
                   onChange={(e) => handleChange("direccion", e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Ubigeo
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={formData.ubigeo}
+                  onChange={(e) => handleChange("ubigeo", e.target.value.replace(/\D/g, ""))}
+                  placeholder="150101"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Código de 6 dígitos (RENIEC/SUNAT)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Código Local Anexo
+                </label>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={formData.codigoLocalAnexo}
+                  onChange={(e) => handleChange("codigoLocalAnexo", e.target.value.replace(/\D/g, ""))}
+                  placeholder="0000"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Departamento
+                </label>
+                <input
+                  type="text"
+                  value={formData.departamento}
+                  onChange={(e) => handleChange("departamento", e.target.value)}
+                  placeholder="LIMA"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Provincia
+                </label>
+                <input
+                  type="text"
+                  value={formData.provincia}
+                  onChange={(e) => handleChange("provincia", e.target.value)}
+                  placeholder="LIMA"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Distrito
+                </label>
+                <input
+                  type="text"
+                  value={formData.distrito}
+                  onChange={(e) => handleChange("distrito", e.target.value)}
+                  placeholder="LIMA"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>

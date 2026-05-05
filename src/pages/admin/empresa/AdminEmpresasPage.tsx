@@ -18,7 +18,12 @@ export default function AdminEmpresasPage() {
     ruc: "",
     razonSocial: "",
     nombreComercial: "",
+    ubigeo: "",
+    codigoLocalAnexo: "0000",
     direccion: "",
+    departamento: "",
+    provincia: "",
+    distrito: "",
     sunatAmbiente: "BETA" as "BETA" | "PROD",
     igvPorcentaje: 18,
     sunatSolUsuario: "",
@@ -30,7 +35,12 @@ export default function AdminEmpresasPage() {
       ruc: "",
       razonSocial: "",
       nombreComercial: "",
+      ubigeo: "",
+      codigoLocalAnexo: "0000",
       direccion: "",
+      departamento: "",
+      provincia: "",
+      distrito: "",
       sunatAmbiente: "BETA",
       igvPorcentaje: 18,
       sunatSolUsuario: "",
@@ -51,7 +61,12 @@ export default function AdminEmpresasPage() {
       ruc: empresa.ruc ?? "",
       razonSocial: empresa.razonSocial ?? "",
       nombreComercial: empresa.nombreComercial ?? "",
+      ubigeo: empresa.ubigeo ?? "",
+      codigoLocalAnexo: empresa.codigoLocalAnexo ?? "0000",
       direccion: empresa.direccion ?? "",
+      departamento: empresa.departamento ?? "",
+      provincia: empresa.provincia ?? "",
+      distrito: empresa.distrito ?? "",
       sunatAmbiente: empresa.sunatAmbiente ?? "BETA",
       igvPorcentaje: empresa.igvPorcentaje ?? 18,
       sunatSolUsuario: empresa.sunatSolUsuario ?? "",
@@ -75,7 +90,12 @@ export default function AdminEmpresasPage() {
           ruc: form.ruc.trim(),
           razonSocial: form.razonSocial.trim(),
           nombreComercial: form.nombreComercial.trim() || undefined,
+          ubigeo: form.ubigeo.trim() || undefined,
+          codigoLocalAnexo: form.codigoLocalAnexo.trim() || undefined,
           direccion: form.direccion.trim() || undefined,
+          departamento: form.departamento.trim() || undefined,
+          provincia: form.provincia.trim() || undefined,
+          distrito: form.distrito.trim() || undefined,
           sunatAmbiente: form.sunatAmbiente,
           igvPorcentaje: form.igvPorcentaje,
           sunatSolUsuario: form.sunatSolUsuario.trim() || undefined,
@@ -86,7 +106,12 @@ export default function AdminEmpresasPage() {
           ruc: form.ruc.trim(),
           razonSocial: form.razonSocial.trim(),
           nombreComercial: form.nombreComercial.trim() || undefined,
+          ubigeo: form.ubigeo.trim() || undefined,
+          codigoLocalAnexo: form.codigoLocalAnexo.trim() || undefined,
           direccion: form.direccion.trim() || undefined,
+          departamento: form.departamento.trim() || undefined,
+          provincia: form.provincia.trim() || undefined,
+          distrito: form.distrito.trim() || undefined,
           sunatAmbiente: form.sunatAmbiente,
           igvPorcentaje: form.igvPorcentaje,
           sunatSolUsuario: form.sunatSolUsuario.trim() || undefined,
@@ -189,6 +214,28 @@ export default function AdminEmpresasPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-semibold text-slate-700">Ubigeo</label>
+              <input
+                type="text"
+                maxLength={6}
+                value={form.ubigeo}
+                onChange={(e) => setForm({ ...form, ubigeo: e.target.value.replace(/\D/g, "") })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="150101"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">Código Local Anexo</label>
+              <input
+                type="text"
+                maxLength={4}
+                value={form.codigoLocalAnexo}
+                onChange={(e) => setForm({ ...form, codigoLocalAnexo: e.target.value.replace(/\D/g, "") })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="0000"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-semibold text-slate-700">Dirección</label>
               <input
                 type="text"
@@ -196,6 +243,36 @@ export default function AdminEmpresasPage() {
                 onChange={(e) => setForm({ ...form, direccion: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
                 placeholder="Av. Principal 123, Lima"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">Departamento</label>
+              <input
+                type="text"
+                value={form.departamento}
+                onChange={(e) => setForm({ ...form, departamento: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="LIMA"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">Provincia</label>
+              <input
+                type="text"
+                value={form.provincia}
+                onChange={(e) => setForm({ ...form, provincia: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="LIMA"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">Distrito</label>
+              <input
+                type="text"
+                value={form.distrito}
+                onChange={(e) => setForm({ ...form, distrito: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="LIMA"
               />
             </div>
             <div>
