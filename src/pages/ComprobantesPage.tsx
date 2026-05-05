@@ -2,6 +2,7 @@
 import { AxiosError } from "axios";
 import { listComprobantes } from "../api/comprobantesApi";
 import type { Comprobante } from "../api/comprobantesApi";
+import type { ComprobantesFilters } from "../api/comprobantesApi";
 import StatusPill from "../components/StatusPill";
 import Modal from "../components/Modal";
 import { getAuth } from "../auth/authStore";
@@ -18,18 +19,6 @@ type Estado =
   | "ERROR"
   | "ANULADO"
   | "ENVIADO";
-
-function matchesEstadoFilter(estadoComprobante: string, estadoFiltro: Estado): boolean {
-  if (estadoFiltro === "ALL") return true;
-
-  const estado = (estadoComprobante || "").toUpperCase();
-
-  if (estadoFiltro === "PENDIENTE") {
-    return estado === "PENDIENTE" || estado === "PENDIENTE_ENVIO" || estado === "PENDIENTE_BAJA";
-  }
-
-  return estado === estadoFiltro;
-}
 
 function toInputDate(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -240,11 +229,21 @@ export default function ComprobantesPage() {
     }
   }
 
-  async function load(page = serverPage) {
+  function buildFiltersFromApplied(): ComprobantesFilters {
+    return {
+      tipoDoc: appliedTipoDoc,
+      estado: appliedEstado,
+      qEntidad: appliedQEntidad.trim() || undefined,
+      desde: appliedDesde,
+      hasta: appliedHasta,
+    };
+  }
+
+  async function load(page = serverPage, filters?: ComprobantesFilters) {
     try {
       setErr(null);
       setLoading(true);
-      const pageData = await listComprobantes(page, PAGE_SIZE);
+      const pageData = await listComprobantes(page, PAGE_SIZE, filters ?? buildFiltersFromApplied());
       setRows(pageData.content);
       setTotalElements(pageData.totalElements);
       setTotalPages(pageData.totalPages);
@@ -271,40 +270,12 @@ export default function ComprobantesPage() {
     }
   }
 
-  function filterComprobantes(data: Comprobante[]) {
-    const q = appliedQEntidad.trim().toLowerCase();
-
-    return data.filter((r) => {
-      if (!r.fechaEmision) return false;
-      const fechaComp = r.fechaEmision.split("T")[0];
-      if (fechaComp < appliedDesde || fechaComp > appliedHasta) return false;
-
-      if (appliedTipoDoc === "ALL") {
-        if (r.tipoDoc !== "01" && r.tipoDoc !== "03" && r.tipoDoc !== "07" && r.tipoDoc !== "08") return false;
-      } else if (appliedTipoDoc === "SUNAT_CPE") {
-        if (r.tipoDoc !== "01" && r.tipoDoc !== "03") return false;
-      } else if (r.tipoDoc !== appliedTipoDoc) {
-        return false;
-      }
-
-      if (!matchesEstadoFilter(r.estado || "", appliedEstado)) return false;
-
-      if (q) {
-        const nombre = (r.receptorNombre || "").toLowerCase();
-        const doc = (r.receptorNroDoc || "").toLowerCase();
-        if (!nombre.includes(q) && !doc.includes(q)) return false;
-      }
-
-      return true;
-    });
-  }
-
-  async function getAllComprobantesForReport(): Promise<Comprobante[]> {
-    const firstPage = await listComprobantes(0, PAGE_SIZE);
+  async function getAllComprobantesForReport(filters: ComprobantesFilters): Promise<Comprobante[]> {
+    const firstPage = await listComprobantes(0, PAGE_SIZE, filters);
     const allRows = [...firstPage.content];
 
     for (let page = 1; page < firstPage.totalPages; page++) {
-      const nextPage = await listComprobantes(page, PAGE_SIZE);
+      const nextPage = await listComprobantes(page, PAGE_SIZE, filters);
       allRows.push(...nextPage.content);
     }
 
@@ -317,33 +288,29 @@ export default function ComprobantesPage() {
 
   // Función para aplicar los filtros
   function applyFilters() {
+    const filters: ComprobantesFilters = {
+      tipoDoc,
+      estado,
+      qEntidad: qEntidad.trim() || undefined,
+      desde,
+      hasta,
+    };
+
     setAppliedTipoDoc(tipoDoc);
     setAppliedQEntidad(qEntidad);
     setAppliedEstado(estado);
     setAppliedDesde(desde);
     setAppliedHasta(hasta);
+
+    load(0, filters);
   }
 
-  // ? Filtrado en frontend (temporal). Luego lo mandas al backend.
-  const filtered = useMemo(() => {
-    return filterComprobantes(rows);
-  }, [rows, appliedDesde, appliedHasta, appliedTipoDoc, appliedEstado, appliedQEntidad]);
-
-  // Paginación (ahora server-side, filtrado aún en cliente)
-  const [currentPage, setCurrentPage] = useState(1);
+  const filtered = rows;
   const itemsPerPage = PAGE_SIZE;
-  
-  // Filtrado client-side sobre la página actual del servidor
+
   const paginatedData = filtered;
 
-  // Total real: si no hay filtros locales extra, usar totalElements del server
-  const displayTotal = filtered.length;
   const displayTotalPages = totalPages;
-
-  // Resetear a pógina 1 cuando cambien los filtros aplicados
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [appliedDesde, appliedHasta, appliedTipoDoc, appliedEstado, appliedQEntidad]);
 
   const totals = useMemo(() => {
     let facturas = 0;
@@ -365,6 +332,13 @@ export default function ComprobantesPage() {
   function onResetFilters() {
     const firstDay = toInputDate(firstDayOfMonth);
     const todayDate = toInputDate(today);
+    const filters: ComprobantesFilters = {
+      tipoDoc: "SUNAT_CPE",
+      estado: "ALL",
+      qEntidad: undefined,
+      desde: firstDay,
+      hasta: todayDate,
+    };
     
     setTipoDoc("SUNAT_CPE");
     setQEntidad("");
@@ -378,6 +352,8 @@ export default function ComprobantesPage() {
     setAppliedEstado("ALL");
     setAppliedDesde(firstDay);
     setAppliedHasta(todayDate);
+
+    load(0, filters);
   }
 
   function getDocRelacionado(r: Comprobante) {
@@ -393,8 +369,8 @@ export default function ComprobantesPage() {
     try {
       setErr(null);
       setLoading(true);
-      const allRows = await getAllComprobantesForReport();
-      reportRows = filterComprobantes(allRows);
+      const allRows = await getAllComprobantesForReport(buildFiltersFromApplied());
+      reportRows = allRows;
     } catch {
       setErr("No se pudo generar el reporte completo. Intenta nuevamente.");
       return;

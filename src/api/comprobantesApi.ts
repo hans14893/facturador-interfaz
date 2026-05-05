@@ -108,13 +108,32 @@ export type PageResponse<T> = {
   last: boolean;
 };
 
+export type ComprobantesFilters = {
+  tipoDoc?: string;
+  estado?: string;
+  qEntidad?: string;
+  desde?: string;
+  hasta?: string;
+};
+
 export async function listComprobantes(
   page = 0,
   size = 50,
+  filters?: ComprobantesFilters,
 ): Promise<PageResponse<Comprobante>> {
+  const params = {
+    page,
+    size,
+    ...(filters?.tipoDoc ? { tipoDoc: filters.tipoDoc } : {}),
+    ...(filters?.estado ? { estado: filters.estado } : {}),
+    ...(filters?.qEntidad ? { qEntidad: filters.qEntidad } : {}),
+    ...(filters?.desde ? { desde: filters.desde } : {}),
+    ...(filters?.hasta ? { hasta: filters.hasta } : {}),
+  };
+
   const { data } = await http.get<PageResponse<Comprobante>>(
     "/api/v1/comprobantes",
-    { params: { page, size } },
+    { params },
   );
   return data;
 }
