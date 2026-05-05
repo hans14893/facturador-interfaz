@@ -6,6 +6,12 @@ import { getEmpresa, updateEmpresa, type Empresa } from "../../../api/adminEmpre
 export default function AdminEmpresaConfigPage() {
   const { empresaId } = useParams();
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [ubigeo, setUbigeo] = useState("");
+  const [codigoLocalAnexo, setCodigoLocalAnexo] = useState("0000");
+  const [direccion, setDireccion] = useState("");
+  const [departamento, setDepartamento] = useState("");
+  const [provincia, setProvincia] = useState("");
+  const [distrito, setDistrito] = useState("");
   const [apiUrl, setApiUrl] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [solUsuario, setSolUsuario] = useState("");
@@ -20,6 +26,12 @@ export default function AdminEmpresaConfigPage() {
     try {
       const data = await getEmpresa(Number(id));
       setEmpresa(data);
+      setUbigeo(data.ubigeo || "");
+      setCodigoLocalAnexo(data.codigoLocalAnexo || "0000");
+      setDireccion(data.direccion || "");
+      setDepartamento(data.departamento || "");
+      setProvincia(data.provincia || "");
+      setDistrito(data.distrito || "");
       setApiUrl(data.apiConsultaUrl || "https://api.perudevs.com/api/v1");
       setApiToken(data.apiConsultaToken || "");
       setSolUsuario(data.sunatSolUsuario || "");
@@ -42,6 +54,12 @@ export default function AdminEmpresaConfigPage() {
 
     try {
       await updateEmpresa(Number(empresaId), {
+        ubigeo: ubigeo.trim() || undefined,
+        codigoLocalAnexo: codigoLocalAnexo.trim() || undefined,
+        direccion: direccion.trim() || undefined,
+        departamento: departamento.trim() || undefined,
+        provincia: provincia.trim() || undefined,
+        distrito: distrito.trim() || undefined,
         apiConsultaUrl: apiUrl,
         apiConsultaToken: apiToken,
         sunatSolUsuario: solUsuario.trim() || undefined,
@@ -81,6 +99,83 @@ export default function AdminEmpresaConfigPage() {
 
       <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="space-y-4">
+          <div className="mb-6 border-b border-slate-200 pb-6">
+            <h3 className="text-sm font-semibold text-slate-900">Dirección SUNAT</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Estos datos se usan para el emisor en el XML UBL (ubigeo, departamento, provincia, distrito).
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Ubigeo</label>
+                <input
+                  type="text"
+                  value={ubigeo}
+                  onChange={(e) => setUbigeo(e.target.value.replace(/\D/g, ""))}
+                  maxLength={6}
+                  placeholder="150101"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Código local anexo</label>
+                <input
+                  type="text"
+                  value={codigoLocalAnexo}
+                  onChange={(e) => setCodigoLocalAnexo(e.target.value.replace(/\D/g, ""))}
+                  maxLength={4}
+                  placeholder="0000"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">Dirección fiscal</label>
+                <input
+                  type="text"
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  placeholder="Av. Principal 123"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Departamento</label>
+                <input
+                  type="text"
+                  value={departamento}
+                  onChange={(e) => setDepartamento(e.target.value)}
+                  placeholder="LIMA"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Provincia</label>
+                <input
+                  type="text"
+                  value={provincia}
+                  onChange={(e) => setProvincia(e.target.value)}
+                  placeholder="LIMA"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Distrito</label>
+                <input
+                  type="text"
+                  value={distrito}
+                  onChange={(e) => setDistrito(e.target.value)}
+                  placeholder="LIMA"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700">URL de API</label>
             <input
