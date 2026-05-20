@@ -101,6 +101,10 @@ export default function ComprobantesPage() {
   const [appliedHasta, setAppliedHasta] = useState(todayDate);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showReenvioFechaModal, setShowReenvioFechaModal] = useState(false);
+  const [reenvioConFechaTarget, setReenvioConFechaTarget] = useState<Comprobante | null>(null);
+  const [fechaReenvio, setFechaReenvio] = useState(toInputDate(new Date()));
+  const [fechaReenvioError, setFechaReenvioError] = useState<string | null>(null);
 
   // Paginación servidor
   const [serverPage, setServerPage] = useState(0);
@@ -267,13 +271,30 @@ export default function ComprobantesPage() {
     if (!(tipoDoc === "01" || tipoDoc === "03")) return "Solo Factura (01) y Boleta (03) se reenvían manualmente";
     if (estado === "ACEPTADO") return "No reenviable: comprobante ya aceptado";
     if (estado === "ANULADO") return "No reenviable: comprobante anulado";
+    if (estado === "RECHAZADO" && isError1079Fecha(r)) return "Reenviar boleta corrigiendo fecha de emisión";
     if (estado === "RECHAZADO") return "No reenviable: rechazo formal SUNAT";
     return "No reenviable por estado";
+  }
+
+  function isError1079Fecha(r: Comprobante) {
+    const codigo = String(r.sunatCodigo || "").trim().toUpperCase();
+    const mensaje = String(r.sunatMensaje || "").trim().toUpperCase();
+
+    return (
+      codigo.includes("1079") ||
+      mensaje.includes("1079") ||
+      mensaje.includes("SOLO PUEDE ENVIAR EL COMPROBANTE EN UN RESUMEN DIARIO") ||
+      (mensaje.includes("ISSUEDATE") && mensaje.includes("LINEA"))
+    );
   }
 
   function isErrorTecnico(r: Comprobante) {
     const codigo = String(r.sunatCodigo || "").trim().toUpperCase();
     const mensaje = String(r.sunatMensaje || "").trim().toUpperCase();
+
+    if (isError1079Fecha(r)) {
+      return true;
+    }
 
     if (
       codigo === "CLIENT_ERROR" ||
@@ -301,13 +322,76 @@ export default function ComprobantesPage() {
     );
   }
 
-  async function handleReenviar(id: number) {
+  function abrirModalReenvioConFecha(r: Comprobante) {
+    const baseFecha = String(r.fechaEmision || "").split("T")[0] || toInputDate(new Date());
+    setReenvioConFechaTarget(r);
+    setFechaReenvio(baseFecha);
+    setFechaReenvioError(null);
+    setShowReenvioFechaModal(true);
+  }
+
+  function cerrarModalReenvioConFecha() {
+    setShowReenvioFechaModal(false);
+    setReenvioConFechaTarget(null);
+    setFechaReenvioError(null);
+  }
+
+  async function handleReenviar(r: Comprobante) {
+    if (r.tipoDoc === "03" && isError1079Fecha(r)) {
+      abrirModalReenvioConFecha(r);
+      return;
+    }
+
     try {
       setErr(null);
       setOkMsg(null);
-      setReenviandoId(id);
-      const resp = await reenviarComprobante(id);
+      setReenviandoId(r.id);
+      const resp = await reenviarComprobante(r.id);
       setOkMsg(resp?.message || "Comprobante encolado para reenvio.");
+      await load(serverPage, buildFiltersFromApplied());
+    } catch (ex: unknown) {
+      if (ex instanceof AxiosError) {
+        const data = ex.response?.data;
+        const msg =
+          typeof data === "string"
+            ? data
+            : typeof data === "object" && data !== null && "message" in data
+              ? String((data as Record<string, unknown>).message ?? "")
+              : "";
+        setErr(msg || ex.message || "No se pudo reenviar el comprobante");
+      } else if (ex instanceof Error) {
+        setErr(ex.message);
+      } else {
+        setErr("No se pudo reenviar el comprobante");
+      }
+    } finally {
+      setReenviandoId(null);
+    }
+  }
+
+  async function confirmarReenvioConFecha() {
+    if (!reenvioConFechaTarget) return;
+
+    const fecha = String(fechaReenvio || "").trim();
+    if (!fecha) {
+      setFechaReenvioError("Debe seleccionar una fecha de emisión.");
+      return;
+    }
+
+    const hoy = toInputDate(new Date());
+    if (fecha > hoy) {
+      setFechaReenvioError("La fecha de emisión no puede ser futura.");
+      return;
+    }
+
+    try {
+      setErr(null);
+      setOkMsg(null);
+      setFechaReenvioError(null);
+      setReenviandoId(reenvioConFechaTarget.id);
+      const resp = await reenviarComprobante(reenvioConFechaTarget.id, { fechaEmision: fecha });
+      setOkMsg(resp?.message || "Comprobante encolado para reenvio.");
+      cerrarModalReenvioConFecha();
       await load(serverPage, buildFiltersFromApplied());
     } catch (ex: unknown) {
       if (ex instanceof AxiosError) {
@@ -1101,7 +1185,7 @@ export default function ComprobantesPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void handleReenviar(r.id);
+                                void handleReenviar(r);
                               }}
                               disabled={!isReenviable(r) || reenviandoId === r.id}
                               className="inline-flex items-center justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1206,7 +1290,7 @@ export default function ComprobantesPage() {
                     </button>
 
                     <button
-                      onClick={() => void handleReenviar(r.id)}
+                      onClick={() => void handleReenviar(r)}
                       className="flex-1 rounded-full bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!isReenviable(r) || reenviandoId === r.id}
                       title={getReenvioTitle(r)}
@@ -1395,6 +1479,52 @@ export default function ComprobantesPage() {
                 className="w-full h-full border-0 rounded"
                 title="Vista previa de la Nota de Cródito"
               />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {showReenvioFechaModal && reenvioConFechaTarget && (
+        <Modal
+          isOpen={showReenvioFechaModal}
+          onClose={cerrarModalReenvioConFecha}
+          title="Reenviar boleta con fecha"
+          size="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Este comprobante tiene error 1079. Selecciona la fecha de emisión para reenviar por Resumen Diario.
+            </p>
+
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Fecha de emisión</label>
+              <input
+                type="date"
+                value={fechaReenvio}
+                max={toInputDate(new Date())}
+                onChange={(e) => {
+                  setFechaReenvio(e.target.value);
+                  setFechaReenvioError(null);
+                }}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+              />
+              {fechaReenvioError && <p className="mt-1 text-xs text-red-600">{fechaReenvioError}</p>}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={cerrarModalReenvioConFecha}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void confirmarReenvioConFecha()}
+                disabled={reenviandoId === reenvioConFechaTarget.id}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {reenviandoId === reenvioConFechaTarget.id ? "Enviando..." : "Reenviar"}
+              </button>
             </div>
           </div>
         </Modal>

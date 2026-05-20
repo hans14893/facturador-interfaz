@@ -231,7 +231,17 @@ export async function emitirComprobante(request: CpeRequest): Promise<Comprobant
   return data;
 }
 
-export async function reenviarComprobante(id: number): Promise<{ ok?: boolean; message?: string; jobId?: number }> {
-  const { data } = await http.post<{ ok?: boolean; message?: string; jobId?: number }>(`/api/v1/comprobantes/${id}/reenviar`);
+export type ReenviarComprobanteRequest = {
+  fechaEmision?: string;
+};
+
+export async function reenviarComprobante(
+  id: number,
+  request?: ReenviarComprobanteRequest,
+): Promise<{ ok?: boolean; message?: string; jobId?: number }> {
+  const { data } = await http.post<{ ok?: boolean; message?: string; jobId?: number }>(
+    `/api/v1/comprobantes/${id}/reenviar`,
+    request ?? {},
+  );
   return data;
 }
