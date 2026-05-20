@@ -246,8 +246,39 @@ export default function ComprobantesPage() {
     const tipoDoc = String(r.tipoDoc || "").trim();
     if (r.anulado) return false;
     if (!(tipoDoc === "01" || tipoDoc === "03")) return false;
-    if (estado === "ACEPTADO" || estado === "ANULADO" || estado === "RECHAZADO") return false;
+    if (estado === "ACEPTADO" || estado === "ANULADO") return false;
+    if (estado === "RECHAZADO" && !isErrorTecnico(r)) return false;
     return true;
+  }
+
+  function isErrorTecnico(r: Comprobante) {
+    const codigo = String(r.sunatCodigo || "").trim().toUpperCase();
+    const mensaje = String(r.sunatMensaje || "").trim().toUpperCase();
+
+    if (
+      codigo === "CLIENT_ERROR" ||
+      codigo === "SOAP_FAULT" ||
+      codigo === "NO_RESPONSE" ||
+      codigo === "NO_STATUS" ||
+      codigo === "TIMEOUT" ||
+      codigo === "ERROR" ||
+      codigo === "REENVIO_MANUAL" ||
+      codigo === "SERVICE_UNAVAILABLE" ||
+      codigo === "BAD_GATEWAY"
+    ) {
+      return true;
+    }
+
+    return (
+      mensaje.includes("CLIENT_ERROR") ||
+      mensaje.includes("SOAP_FAULT") ||
+      mensaje.includes("TIMEOUT") ||
+      mensaje.includes("CONNECTION") ||
+      mensaje.includes("NO SE PUDO CONECTAR") ||
+      mensaje.includes("NO RESPONSE") ||
+      mensaje.includes("ERROR AL ENVIAR") ||
+      mensaje.includes("ERROR INTERNO")
+    );
   }
 
   async function handleReenviar(id: number) {
