@@ -251,6 +251,26 @@ export default function ComprobantesPage() {
     return true;
   }
 
+  function usaResumenDiario(r: Comprobante) {
+    const tipoDoc = String(r.tipoDoc || "").trim();
+    if (tipoDoc === "03") return true;
+    if ((tipoDoc === "07" || tipoDoc === "08") && String(r.docReferenciaTipoDoc || "").trim() === "03") {
+      return true;
+    }
+    return false;
+  }
+
+  function getReenvioTitle(r: Comprobante) {
+    if (isReenviable(r)) return "Reenviar a SUNAT";
+    const estado = String(r.estado || "").toUpperCase();
+    const tipoDoc = String(r.tipoDoc || "").trim();
+    if (!(tipoDoc === "01" || tipoDoc === "03")) return "Solo Factura (01) y Boleta (03) se reenvían manualmente";
+    if (estado === "ACEPTADO") return "No reenviable: comprobante ya aceptado";
+    if (estado === "ANULADO") return "No reenviable: comprobante anulado";
+    if (estado === "RECHAZADO") return "No reenviable: rechazo formal SUNAT";
+    return "No reenviable por estado";
+  }
+
   function isErrorTecnico(r: Comprobante) {
     const codigo = String(r.sunatCodigo || "").trim().toUpperCase();
     const mensaje = String(r.sunatMensaje || "").trim().toUpperCase();
@@ -1013,7 +1033,9 @@ export default function ComprobantesPage() {
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                <span className="text-xs text-orange-600 font-medium">Pendiente</span>
+                                <span className="text-xs text-orange-600 font-medium">
+                                  {usaResumenDiario(r) ? 'Pendiente (RC)' : 'Pendiente'}
+                                </span>
                               </div>
                             ) : (
                               <StatusPill value={r.estado} title={r.sunatMensaje || `Estado: ${r.estado}`} />
@@ -1083,7 +1105,7 @@ export default function ComprobantesPage() {
                               }}
                               disabled={!isReenviable(r) || reenviandoId === r.id}
                               className="inline-flex items-center justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={isReenviable(r) ? "Reenviar a SUNAT" : "No reenviable por estado"}
+                              title={getReenvioTitle(r)}
                             >
                               {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
                             </button>
@@ -1126,6 +1148,11 @@ export default function ComprobantesPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <StatusPill value={r.estado} title={r.sunatMensaje || `Estado: ${r.estado}`} />
+                      {r.estado === "PENDIENTE_ENVIO" && usaResumenDiario(r) ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                          Resumen Diario (RC)
+                        </span>
+                      ) : null}
                       {r.anulado ? (
                         <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
                           {r.motivoAnulacion === "NC" ? "ANULADO POR NC" : r.motivoAnulacion === "RA" ? "ANULADO POR RA" : "ANULADO"}
@@ -1182,7 +1209,7 @@ export default function ComprobantesPage() {
                       onClick={() => void handleReenviar(r.id)}
                       className="flex-1 rounded-full bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!isReenviable(r) || reenviandoId === r.id}
-                      title={isReenviable(r) ? "Reenviar a SUNAT" : "No reenviable por estado"}
+                      title={getReenvioTitle(r)}
                     >
                       {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
                     </button>
