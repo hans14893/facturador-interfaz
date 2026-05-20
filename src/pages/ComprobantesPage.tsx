@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { AxiosError } from "axios";
-import { listComprobantes } from "../api/comprobantesApi";
+import { listComprobantes, reenviarComprobante } from "../api/comprobantesApi";
 import type { Comprobante } from "../api/comprobantesApi";
 import type { ComprobantesFilters } from "../api/comprobantesApi";
 import StatusPill from "../components/StatusPill";
@@ -78,6 +78,8 @@ export default function ComprobantesPage() {
   const [rows, setRows] = useState<Comprobante[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [reenviandoId, setReenviandoId] = useState<number | null>(null);
 
   // ? Filtros UI (valores del formulario)
   // Por defecto: ALL (todos)
@@ -237,6 +239,43 @@ export default function ComprobantesPage() {
       desde: appliedDesde,
       hasta: appliedHasta,
     };
+  }
+
+  function isReenviable(r: Comprobante) {
+    const estado = String(r.estado || "").toUpperCase();
+    const tipoDoc = String(r.tipoDoc || "").trim();
+    if (r.anulado) return false;
+    if (!(tipoDoc === "01" || tipoDoc === "03")) return false;
+    if (estado === "ACEPTADO" || estado === "ANULADO" || estado === "RECHAZADO") return false;
+    return true;
+  }
+
+  async function handleReenviar(id: number) {
+    try {
+      setErr(null);
+      setOkMsg(null);
+      setReenviandoId(id);
+      const resp = await reenviarComprobante(id);
+      setOkMsg(resp?.message || "Comprobante encolado para reenvio.");
+      await load(serverPage, buildFiltersFromApplied());
+    } catch (ex: unknown) {
+      if (ex instanceof AxiosError) {
+        const data = ex.response?.data;
+        const msg =
+          typeof data === "string"
+            ? data
+            : typeof data === "object" && data !== null && "message" in data
+              ? String((data as Record<string, unknown>).message ?? "")
+              : "";
+        setErr(msg || ex.message || "No se pudo reenviar el comprobante");
+      } else if (ex instanceof Error) {
+        setErr(ex.message);
+      } else {
+        setErr("No se pudo reenviar el comprobante");
+      }
+    } finally {
+      setReenviandoId(null);
+    }
   }
 
   async function load(page = serverPage, filters?: ComprobantesFilters) {
@@ -836,6 +875,7 @@ export default function ComprobantesPage() {
       {/* Estado carga / error */}
       {loading && <p className="mt-4 text-slate-600">Cargando...</p>}
       {err && <p className="mt-4 text-red-600">{err}</p>}
+      {okMsg && <p className="mt-4 text-emerald-700">{okMsg}</p>}
 
       {/* Tabla / Cards Responsive */}
       {!loading && !err && (
@@ -857,6 +897,7 @@ export default function ComprobantesPage() {
                       <th className="px-2 py-2 text-center font-semibold">PDF</th>
                       <th className="px-2 py-2 text-center font-semibold">XML</th>
                       <th className="px-2 py-2 text-center font-semibold">CDR</th>
+                      <th className="px-2 py-2 text-center font-semibold">REENVIO</th>
                       
                     </tr>
                   </thead>
@@ -1003,6 +1044,20 @@ export default function ComprobantesPage() {
                             )}
                           </td>
 
+                          <td className="px-2 py-1.5 whitespace-nowrap text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleReenviar(r.id);
+                              }}
+                              disabled={!isReenviable(r) || reenviandoId === r.id}
+                              className="inline-flex items-center justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={isReenviable(r) ? "Reenviar a SUNAT" : "No reenviable por estado"}
+                            >
+                              {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
+                            </button>
+                          </td>
+
                           
                         </tr>
                       );
@@ -1090,6 +1145,15 @@ export default function ComprobantesPage() {
                       disabled={r.estado === 'PENDIENTE_ENVIO' || r.estado === 'PENDIENTE_BAJA'}
                     >
                       CDR
+                    </button>
+
+                    <button
+                      onClick={() => void handleReenviar(r.id)}
+                      className="flex-1 rounded-full bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!isReenviable(r) || reenviandoId === r.id}
+                      title={isReenviable(r) ? "Reenviar a SUNAT" : "No reenviable por estado"}
+                    >
+                      {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
                     </button>
 
                   </div>

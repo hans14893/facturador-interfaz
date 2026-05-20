@@ -230,3 +230,8 @@ export async function emitirComprobante(request: CpeRequest): Promise<Comprobant
   const { data } = await http.post<Comprobante>("/api/v1/comprobantes", request);
   return data;
 }
+
+export async function reenviarComprobante(id: number): Promise<{ ok?: boolean; message?: string; jobId?: number }> {
+  const { data } = await http.post<{ ok?: boolean; message?: string; jobId?: number }>(`/api/v1/comprobantes/${id}/reenviar`);
+  return data;
+}
