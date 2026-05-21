@@ -288,11 +288,26 @@ export default function ComprobantesPage() {
     );
   }
 
+  function isTicket99Persistente(r: Comprobante) {
+    const codigo = String(r.sunatCodigo || "").trim().toUpperCase();
+    const mensaje = String(r.sunatMensaje || "").trim().toUpperCase();
+
+    return (
+      codigo === "99" ||
+      mensaje.includes("TICKET STATUS: 99") ||
+      mensaje.includes("TICKET 99 PERSISTENTE")
+    );
+  }
+
   function isErrorTecnico(r: Comprobante) {
     const codigo = String(r.sunatCodigo || "").trim().toUpperCase();
     const mensaje = String(r.sunatMensaje || "").trim().toUpperCase();
 
     if (isError1079Fecha(r)) {
+      return true;
+    }
+
+    if (isTicket99Persistente(r)) {
       return true;
     }
 
