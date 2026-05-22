@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { AxiosError } from "axios";
-import { listComprobantes, reenviarComprobante } from "../api/comprobantesApi";
+import { listComprobantes, reenviarComprobante, getComprobantesSummary } from "../api/comprobantesApi";
 import type { Comprobante } from "../api/comprobantesApi";
 import type { ComprobantesFilters } from "../api/comprobantesApi";
 import StatusPill from "../components/StatusPill";
@@ -110,6 +110,12 @@ export default function ComprobantesPage() {
   const [serverPage, setServerPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [totals, setTotals] = useState({
+    facturas: 0,
+    boletas: 0,
+    notasCredito: 0,
+    notasDebito: 0,
+  });
   const PAGE_SIZE = 50;
 
   // Estados para modal de preview PDF
@@ -432,11 +438,21 @@ export default function ComprobantesPage() {
     try {
       setErr(null);
       setLoading(true);
-      const pageData = await listComprobantes(page, PAGE_SIZE, filters ?? buildFiltersFromApplied());
+      const activeFilters = filters ?? buildFiltersFromApplied();
+      const [pageData, summaryData] = await Promise.all([
+        listComprobantes(page, PAGE_SIZE, activeFilters),
+        getComprobantesSummary(activeFilters)
+      ]);
       setRows(pageData.content);
       setTotalElements(pageData.totalElements);
       setTotalPages(pageData.totalPages);
       setServerPage(pageData.number);
+      setTotals({
+        facturas: summaryData.facturas,
+        boletas: summaryData.boletas,
+        notasCredito: summaryData.notasCredito,
+        notasDebito: summaryData.notasDebito,
+      });
     } catch (ex: unknown) {
       if (ex instanceof AxiosError) {
         const data = ex.response?.data;
@@ -500,23 +516,6 @@ export default function ComprobantesPage() {
   const paginatedData = filtered;
 
   const displayTotalPages = totalPages;
-
-  const totals = useMemo(() => {
-    let facturas = 0;
-    let boletas = 0;
-    let notasCredito = 0;
-    let notasDebito = 0;
-
-    for (const r of filtered) {
-      const t = Number(r.total || 0);
-      if (r.tipoDoc === "01") facturas += t;
-      else if (r.tipoDoc === "03") boletas += t;
-      else if (r.tipoDoc === "07") notasCredito += t;
-      else if (r.tipoDoc === "08") notasDebito += t;
-    }
-
-    return { facturas, boletas, notasCredito, notasDebito };
-  }, [filtered]);
 
   function onResetFilters() {
     const firstDay = toInputDate(firstDayOfMonth);

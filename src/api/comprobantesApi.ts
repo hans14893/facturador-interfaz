@@ -138,6 +138,32 @@ export async function listComprobantes(
   return data;
 }
 
+export type ComprobantesSummary = {
+  facturas: number;
+  boletas: number;
+  notasCredito: number;
+  notasDebito: number;
+  totalElements: number;
+};
+
+export async function getComprobantesSummary(
+  filters?: ComprobantesFilters,
+): Promise<ComprobantesSummary> {
+  const params = {
+    ...(filters?.tipoDoc ? { tipoDoc: filters.tipoDoc } : {}),
+    ...(filters?.estado ? { estado: filters.estado } : {}),
+    ...(filters?.qEntidad ? { qEntidad: filters.qEntidad } : {}),
+    ...(filters?.desde ? { desde: filters.desde } : {}),
+    ...(filters?.hasta ? { hasta: filters.hasta } : {}),
+  };
+
+  const { data } = await http.get<ComprobantesSummary>(
+    "/api/v1/comprobantes/summary",
+    { params },
+  );
+  return data;
+}
+
 export async function getComprobante(id: number): Promise<Comprobante> {
   const { data } = await http.get<Comprobante>(`/api/v1/comprobantes/${id}`);
   return data;
