@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { AxiosError } from "axios";
-import { listComprobantes, reenviarComprobante, getComprobantesSummary } from "../api/comprobantesApi";
+import { listComprobantes, reenviarComprobante, getComprobantesSummary, consultarCdrComprobante } from "../api/comprobantesApi";
 import type { Comprobante } from "../api/comprobantesApi";
 import type { ComprobantesFilters } from "../api/comprobantesApi";
 import StatusPill from "../components/StatusPill";
@@ -80,6 +80,7 @@ export default function ComprobantesPage() {
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [reenviandoId, setReenviandoId] = useState<number | null>(null);
+  const [consultandoId, setConsultandoId] = useState<number | null>(null);
 
   // ? Filtros UI (valores del formulario)
   // Por defecto: ALL (todos)
@@ -387,6 +388,38 @@ export default function ComprobantesPage() {
       }
     } finally {
       setReenviandoId(null);
+    }
+  }
+
+  async function handleConsultarCdr(r: Comprobante) {
+    try {
+      setErr(null);
+      setOkMsg(null);
+      setConsultandoId(r.id);
+      const resp = await consultarCdrComprobante(r.id);
+      if (resp.ok) {
+        setOkMsg(resp.message || `CDR consultado correctamente. Estado SUNAT: ${resp.estado}`);
+      } else {
+        setErr(resp.message || "No se pudo sincronizar el estado.");
+      }
+      await load(serverPage, buildFiltersFromApplied());
+    } catch (ex: unknown) {
+      if (ex instanceof AxiosError) {
+        const data = ex.response?.data;
+        const msg =
+          typeof data === "string"
+            ? data
+            : typeof data === "object" && data !== null && "message" in data
+              ? String((data as Record<string, unknown>).message ?? "")
+              : "";
+        setErr(msg || ex.message || "No se pudo consultar el CDR del comprobante");
+      } else if (ex instanceof Error) {
+        setErr(ex.message);
+      } else {
+        setErr("No se pudo consultar el CDR del comprobante");
+      }
+    } finally {
+      setConsultandoId(null);
     }
   }
 
@@ -1196,18 +1229,33 @@ export default function ComprobantesPage() {
                           </td>
 
                           <td className="px-2 py-1.5 whitespace-nowrap text-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleReenviar(r);
-                              }}
-                              disabled={!isReenviable(r) || reenviandoId === r.id}
-                              className="inline-flex items-center justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={getReenvioTitle(r)}
-                            >
-                              {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
-                            </button>
-                          </td>
+                            <div className="flex flex-col gap-1 items-center justify-center">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleReenviar(r);
+                                }}
+                                disabled={!isReenviable(r) || reenviandoId === r.id || consultandoId === r.id}
+                                className="w-24 inline-flex items-center justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={getReenvioTitle(r)}
+                              >
+                                {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
+                              </button>
+                              
+                              {r.tipoDoc === "03" && r.estado !== "ACEPTADO" && r.estado !== "ANULADO" && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleConsultarCdr(r);
+                                  }}
+                                  disabled={consultandoId === r.id || reenviandoId === r.id}
+                                  className="w-24 inline-flex items-center justify-center rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Consultar situación actual en SUNAT usando el ticket"
+                                >
+                                  {consultandoId === r.id ? "Consultando..." : "Consultar CDR"}
+                                </button>
+                              )}
+                            </div>
 
                           
                         </tr>
@@ -1306,11 +1354,22 @@ export default function ComprobantesPage() {
                     <button
                       onClick={() => void handleReenviar(r)}
                       className="flex-1 rounded-full bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!isReenviable(r) || reenviandoId === r.id}
+                      disabled={!isReenviable(r) || reenviandoId === r.id || consultandoId === r.id}
                       title={getReenvioTitle(r)}
                     >
                       {reenviandoId === r.id ? "Enviando..." : "Reenviar"}
                     </button>
+
+                    {r.tipoDoc === "03" && r.estado !== "ACEPTADO" && r.estado !== "ANULADO" && (
+                      <button
+                        onClick={() => void handleConsultarCdr(r)}
+                        className="flex-1 rounded-full bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={consultandoId === r.id || reenviandoId === r.id}
+                        title="Consultar situación actual en SUNAT usando el ticket"
+                      >
+                        {consultandoId === r.id ? "Consultando..." : "Cons. CDR"}
+                      </button>
+                    )}
 
                   </div>
                 </div>

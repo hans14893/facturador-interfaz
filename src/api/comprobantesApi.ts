@@ -271,3 +271,12 @@ export async function reenviarComprobante(
   );
   return data;
 }
+
+export async function consultarCdrComprobante(
+  id: number,
+): Promise<{ ok: boolean; estado: string; sunatCodigo?: string; sunatMensaje?: string; message: string }> {
+  const { data } = await http.post<{ ok: boolean; estado: string; sunatCodigo?: string; sunatMensaje?: string; message: string }>(
+    `/api/v1/comprobantes/${id}/consultar-cdr`,
+  );
+  return data;
+}
