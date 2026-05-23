@@ -1256,6 +1256,7 @@ export default function ComprobantesPage() {
                                 </button>
                               )}
                             </div>
+                          </td>
 
                           
                         </tr>
