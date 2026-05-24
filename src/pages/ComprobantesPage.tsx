@@ -322,12 +322,17 @@ export default function ComprobantesPage() {
       codigo === "CLIENT_ERROR" ||
       codigo === "SOAP_FAULT" ||
       codigo === "NO_RESPONSE" ||
+      codigo === "EMPTY_RESPONSE" ||
       codigo === "NO_STATUS" ||
       codigo === "TIMEOUT" ||
+      codigo === "INVALID_CONTENT_TYPE" ||
+      codigo === "SERVICE_UNAVAILABLE" ||
+      codigo === "BAD_GATEWAY" ||
+      codigo === "UNAUTHORIZED" ||
+      codigo === "FORBIDDEN" ||
       codigo === "ERROR" ||
       codigo === "REENVIO_MANUAL" ||
-      codigo === "SERVICE_UNAVAILABLE" ||
-      codigo === "BAD_GATEWAY"
+      codigo === "SOCKET_TIMEOUT"
     ) {
       return true;
     }
@@ -336,12 +341,33 @@ export default function ComprobantesPage() {
       mensaje.includes("CLIENT_ERROR") ||
       mensaje.includes("SOAP_FAULT") ||
       mensaje.includes("TIMEOUT") ||
+      mensaje.includes("EMPTY_RESPONSE") ||
+      mensaje.includes("INVALID_CONTENT_TYPE") ||
       mensaje.includes("CONNECTION") ||
       mensaje.includes("NO SE PUDO CONECTAR") ||
       mensaje.includes("NO RESPONSE") ||
+      mensaje.includes("SERVICE_UNAVAILABLE") ||
+      mensaje.includes("BAD_GATEWAY") ||
       mensaje.includes("ERROR AL ENVIAR") ||
-      mensaje.includes("ERROR INTERNO")
+      mensaje.includes("ERROR INTERNO") ||
+      mensaje.includes("UNAUTHORIZED") ||
+      mensaje.includes("FORBIDDEN")
     );
+  }
+
+  function getSunatEstadoTooltip(r: Comprobante) {
+    const codigo = String(r.sunatCodigo || "").trim();
+    const mensaje = String(r.sunatMensaje || "").trim();
+
+    if (!codigo && !mensaje) {
+      return `Estado: ${r.estado}`;
+    }
+
+    if (codigo && mensaje && !mensaje.toUpperCase().includes(codigo.toUpperCase())) {
+      return `${codigo} - ${mensaje}`;
+    }
+
+    return mensaje || codigo;
   }
 
   function abrirModalReenvioConFecha(r: Comprobante) {
@@ -716,6 +742,21 @@ export default function ComprobantesPage() {
       return codigo || "-";
     };
 
+    function formatSunatError(r: Comprobante) {
+      const codigo = String(r.sunatCodigo || "").trim();
+      const mensaje = String(r.sunatMensaje || "").trim();
+
+      if (!codigo && !mensaje) {
+        return "-";
+      }
+
+      if (codigo && mensaje && !mensaje.toUpperCase().includes(codigo.toUpperCase())) {
+        return `${codigo} - ${mensaje}`;
+      }
+
+      return mensaje || codigo;
+    }
+
     // Encabezados completos
     const headers = [
       "FECHA EMISIÓN",
@@ -751,7 +792,7 @@ export default function ComprobantesPage() {
       // SUNAT Error: solo mostrar si hay error (no ACEPTADO)
       let sunatError = "-";
       if (estadoUpper === "RECHAZADO" || estadoUpper === "ERROR") {
-        sunatError = r.sunatMensaje || "Error en el comprobante";
+        sunatError = formatSunatError(r) || "Error en el comprobante";
       }
       
       wsData.push([
@@ -773,8 +814,8 @@ export default function ComprobantesPage() {
         r.metodoPago || "CONTADO",
         getDocRelacionado(r),
         esAceptado ? "SI" : "NO",
-        r.sunatMensaje || "-",  // Estado SUNAT - Descripción (mensaje completo de SUNAT)
-        r.sunatCodigo || "-",    // SUNAT Response Code (código de respuesta)
+        formatSunatError(r) || "-",  // Estado SUNAT - Descripción (código + mensaje cuando corresponde)
+        r.sunatCodigo || "-",         // SUNAT Response Code (código de respuesta)
         sunatError,              // SUNAT Error (solo si hay error)
         r.anulado ? "SI" : "NO",
       ]);
@@ -1144,7 +1185,7 @@ export default function ComprobantesPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span className="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-500 text-white text-sm font-medium rounded-lg shadow-xl whitespace-nowrap z-50 border border-green-400">
-                                  {r.sunatMensaje || 'Documento aceptado por SUNAT'}
+                                  {getSunatEstadoTooltip(r) || 'Documento aceptado por SUNAT'}
                                   <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-green-500"></span>
                                 </span>
                               </div>
@@ -1154,7 +1195,7 @@ export default function ComprobantesPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span className="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white text-sm font-medium rounded-lg shadow-xl whitespace-nowrap z-50 border border-red-400">
-                                  {r.sunatMensaje || 'Documento rechazado por SUNAT'}
+                                  {getSunatEstadoTooltip(r) || 'Documento rechazado por SUNAT'}
                                   <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-red-500"></span>
                                 </span>
                               </div>
@@ -1169,7 +1210,7 @@ export default function ComprobantesPage() {
                                 </span>
                               </div>
                             ) : (
-                              <StatusPill value={r.estado} title={r.sunatMensaje || `Estado: ${r.estado}`} />
+                              <StatusPill value={r.estado} title={getSunatEstadoTooltip(r)} />
                             )}
 
                             {r.anulado && anulacionLabel ? (
@@ -1294,7 +1335,7 @@ export default function ComprobantesPage() {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <StatusPill value={r.estado} title={r.sunatMensaje || `Estado: ${r.estado}`} />
+                      <StatusPill value={r.estado} title={getSunatEstadoTooltip(r)} />
                       {r.estado === "PENDIENTE_ENVIO" && usaResumenDiario(r) ? (
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
                           Resumen Diario (RC)

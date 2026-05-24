@@ -20,6 +20,23 @@ export default function ComprobanteDetallePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  const getSunatEstadoTooltip = (value: Comprobante | null) => {
+    if (!value) return "";
+
+    const codigo = String(value.sunatCodigo || "").trim();
+    const mensaje = String(value.sunatMensaje || "").trim();
+
+    if (!codigo && !mensaje) {
+      return `Estado: ${value.estado}`;
+    }
+
+    if (codigo && mensaje && !mensaje.toUpperCase().includes(codigo.toUpperCase())) {
+      return `${codigo} - ${mensaje}`;
+    }
+
+    return mensaje || codigo;
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -63,7 +80,7 @@ export default function ComprobanteDetallePage() {
             <h1 className="text-xl font-semibold">
               {row.tipoDoc}-{row.serie}-{row.correlativo}
             </h1>
-            <StatusPill value={row.estado} />
+            <StatusPill value={row.estado} title={getSunatEstadoTooltip(row)} />
           </div>
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -82,6 +99,16 @@ export default function ComprobanteDetallePage() {
               </div>
               <div className="text-slate-300">
                 {row.fechaEmision ? new Date(row.fechaEmision).toLocaleString() : '-'}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:col-span-2">
+              <div className="text-slate-400 text-xs">Estado SUNAT</div>
+              <div className="mt-1 font-medium text-slate-100">
+                {getSunatEstadoTooltip(row) || `Estado: ${row.estado}`}
+              </div>
+              <div className="mt-2 text-slate-400 text-xs">
+                Código: {row.sunatCodigo || "-"}
               </div>
             </div>
           </div>
